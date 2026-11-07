@@ -9,6 +9,5 @@ data class Artwork(
     val likeCount: Int,
     val viewCount: Int,
     val tags: List<String>,
-    val isLiked: Boolean = false,
-    val isBookmarked: Boolean = false
+    val isLiked: Boolean = false
 )

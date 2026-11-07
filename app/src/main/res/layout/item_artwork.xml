@@ -17,45 +17,30 @@
         android:layout_height="wrap_content"
         android:padding="14dp">
 
-        <!-- Avatar -->
-        <ImageView
-            android:id="@+id/imageAvatar"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
+        <ImageView android:id="@+id/imageAvatar"
+            android:layout_width="40dp" android:layout_height="40dp"
             android:contentDescription="@string/author_avatar"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent"/>
 
-        <!-- Author name -->
-        <TextView
-            android:id="@+id/textAuthorName"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
+        <TextView android:id="@+id/textAuthorName"
+            android:layout_width="0dp" android:layout_height="wrap_content"
             android:layout_marginStart="10dp"
-            android:textColor="@color/text_primary"
-            android:textSize="14sp"
-            android:textStyle="bold"
+            android:textColor="@color/text_primary" android:textSize="14sp" android:textStyle="bold"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toEndOf="@id/imageAvatar"
             app:layout_constraintTop_toTopOf="@id/imageAvatar"/>
 
-        <!-- Artwork title -->
-        <TextView
-            android:id="@+id/textTitle"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
+        <TextView android:id="@+id/textTitle"
+            android:layout_width="0dp" android:layout_height="wrap_content"
             android:layout_marginStart="10dp"
-            android:textColor="@color/text_secondary"
-            android:textSize="12sp"
+            android:textColor="@color/text_secondary" android:textSize="12sp"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toEndOf="@id/imageAvatar"
             app:layout_constraintTop_toBottomOf="@id/textAuthorName"/>
 
-        <!-- Artwork image -->
-        <ImageView
-            android:id="@+id/imageArtwork"
-            android:layout_width="0dp"
-            android:layout_height="220dp"
+        <ImageView android:id="@+id/imageArtwork"
+            android:layout_width="0dp" android:layout_height="220dp"
             android:layout_marginTop="12dp"
             android:contentDescription="@string/artwork_image"
             android:scaleType="centerCrop"
@@ -63,54 +48,44 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/imageAvatar"/>
 
-        <!-- Tags row -->
-        <TextView
-            android:id="@+id/textTags"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
+        <TextView android:id="@+id/textTags"
+            android:layout_width="0dp" android:layout_height="wrap_content"
             android:layout_marginTop="10dp"
-            android:textColor="@color/accent"
-            android:textSize="12sp"
+            android:textColor="@color/accent" android:textSize="12sp"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/imageArtwork"/>
 
-        <!-- Like button -->
-        <ImageButton
-            android:id="@+id/buttonLike"
-            android:layout_width="28dp"
-            android:layout_height="28dp"
+        <ImageView android:id="@+id/iconHeart"
+            android:layout_width="20dp" android:layout_height="20dp"
             android:layout_marginTop="10dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="@string/like"
-            android:src="@drawable/ic_nav_home"
+            android:src="@drawable/ic_heart"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/textTags"/>
 
-        <!-- Like count -->
-        <TextView
-            android:id="@+id/textLikeCount"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="6dp"
-            android:textColor="@color/text_secondary"
-            android:textSize="13sp"
-            app:layout_constraintBottom_toBottomOf="@id/buttonLike"
-            app:layout_constraintStart_toEndOf="@id/buttonLike"
-            app:layout_constraintTop_toTopOf="@id/buttonLike"/>
+        <TextView android:id="@+id/textLikeCount"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:layout_marginStart="5dp"
+            android:textColor="@color/text_secondary" android:textSize="13sp"
+            app:layout_constraintBottom_toBottomOf="@id/iconHeart"
+            app:layout_constraintStart_toEndOf="@id/iconHeart"
+            app:layout_constraintTop_toTopOf="@id/iconHeart"/>
 
-        <!-- View count -->
-        <TextView
-            android:id="@+id/textViewCount"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="20dp"
-            android:textColor="@color/text_secondary"
-            android:textSize="13sp"
-            app:layout_constraintBottom_toBottomOf="@id/buttonLike"
+        <ImageView android:id="@+id/iconEye"
+            android:layout_width="18dp" android:layout_height="18dp"
+            android:layout_marginStart="18dp"
+            android:src="@drawable/ic_eye"
+            app:layout_constraintBottom_toBottomOf="@id/iconHeart"
             app:layout_constraintStart_toEndOf="@id/textLikeCount"
-            app:layout_constraintTop_toTopOf="@id/buttonLike"/>
+            app:layout_constraintTop_toTopOf="@id/iconHeart"/>
+
+        <TextView android:id="@+id/textViewCount"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:layout_marginStart="5dp"
+            android:textColor="@color/text_secondary" android:textSize="13sp"
+            app:layout_constraintBottom_toBottomOf="@id/iconHeart"
+            app:layout_constraintStart_toEndOf="@id/iconEye"
+            app:layout_constraintTop_toTopOf="@id/iconHeart"/>
 
     </androidx.constraintlayout.widget.ConstraintLayout>
-
 </com.google.android.material.card.MaterialCardView>

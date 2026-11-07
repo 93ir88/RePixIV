@@ -1,28 +1,11 @@
 # RePixIV
-
-A Twitter/X-style art feed app that syncs artwork from Pixiv.
+Twitter/X-style art feed syncing from Pixiv. Miuix-inspired dark UI.
 
 ## Build
+Push to `main` → Actions tab → download APK artifact.
 
-Automatic via GitHub Actions — push to `main` and grab the APK from the **Actions** tab.
+## Tabs
+Home · Search · Profile · Settings
 
-For local builds, install [Gradle 8.0.2](https://gradle.org/releases/) then:
-
-```bash
-gradle assembleDebug
-```
-
-## Status
-
-- [x] Base feed UI with mock artwork cards
-- [x] Bottom navigation (Home / Search / Profile)
-- [ ] Pixiv OAuth login
-- [ ] Live artwork sync from Pixiv API
-- [ ] Like / Bookmark actions
-- [ ] Search by tag / artist
-
-## Stack
-
-- Kotlin · AndroidX · Material Components
-- Navigation Component · RecyclerView · Glide
-- Coroutines + LiveData (ready for Pixiv API layer)
+## Settings
+- Color Mode: System / Light / Dark / MonetSystem / MonetLight / MonetDark
