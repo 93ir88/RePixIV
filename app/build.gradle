@@ -36,4 +36,6 @@ dependencies {
     implementation 'com.github.bumptech.glide:glide:4.16.0'
     implementation 'androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0'
     implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
+    // Frosted glass backdrop blur — exact same blur radius as miuix PuredThinGlass (20dp)
+    implementation 'io.github.dimezis:BlurView:2.0.3'
 }
