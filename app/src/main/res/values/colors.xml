@@ -1,14 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="primary">#1A1A2E</color>
-    <color name="primary_variant">#16213E</color>
+    <!-- miuix lightColorScheme -->
+    <color name="primary">#277AF7</color>
     <color name="accent">#E94560</color>
-    <color name="background">#0D0D1A</color>
-    <color name="surface">#1A1A2E</color>
-    <color name="divider">#2A2A42</color>
-    <color name="text_primary">#FFFFFF</color>
-    <color name="text_secondary">#8888AA</color>
-    <color name="nav_background">#000000</color>
+    <color name="background">#FFFFFF</color>
+    <color name="surface">#F7F7F7</color>
+    <color name="surface_container">#FFFFFF</color>
+    <color name="surface_container_highest">#E8E8E8</color>
+    <color name="text_primary">#000000</color>
+    <color name="text_secondary">#66000000</color>
+    <color name="nav_background">#F7F7F7</color>
+    <color name="nav_divider">#E0E0E0</color>
+    <color name="divider">#E0E0E0</color>
     <color name="white">#FFFFFF</color>
     <color name="black">#000000</color>
 </resources>

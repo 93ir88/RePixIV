@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- miuix darkColorScheme -->
+    <color name="primary">#277AF7</color>
+    <color name="accent">#E94560</color>
+    <color name="background">#242424</color>
+    <color name="surface">#000000</color>
+    <color name="surface_container">#242424</color>
+    <color name="surface_container_highest">#2D2D2D</color>
+    <color name="text_primary">#F2F2F2</color>
+    <color name="text_secondary">#66FFFFFF</color>
+    <color name="nav_background">#000000</color>
+    <color name="nav_divider">#393939</color>
+    <color name="divider">#393939</color>
+    <color name="white">#FFFFFF</color>
+    <color name="black">#000000</color>
+</resources>

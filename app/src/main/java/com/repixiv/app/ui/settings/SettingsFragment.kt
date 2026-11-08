@@ -27,47 +27,50 @@ class SettingsFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-
         val prefs = requireContext().getSharedPreferences(MainActivity.PREFS_NAME, Context.MODE_PRIVATE)
         val current = prefs.getInt(MainActivity.KEY_COLOR_MODE, 0)
         binding.prefColorModeValue.text = colorModes[current]
-
-        binding.rowColorMode.setOnClickListener {
-            showColorModeDialog(prefs.getInt(MainActivity.KEY_COLOR_MODE, 0))
-        }
+        binding.rowColorMode.setOnClickListener { showColorModeDialog() }
     }
 
-    private fun showColorModeDialog(selected: Int) {
+    private fun showColorModeDialog() {
+        val prefs = requireContext().getSharedPreferences(MainActivity.PREFS_NAME, Context.MODE_PRIVATE)
+        val selected = prefs.getInt(MainActivity.KEY_COLOR_MODE, 0)
+
         val dialog = Dialog(requireContext())
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
         dialog.setContentView(R.layout.dialog_color_mode)
         dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-        dialog.window?.setLayout(
-            (resources.displayMetrics.widthPixels * 0.72).toInt(),
-            ViewGroup.LayoutParams.WRAP_CONTENT
-        )
+
+        // miuix popup width = ~72% of screen, centered
+        val screenW = resources.displayMetrics.widthPixels
+        dialog.window?.setLayout((screenW * 0.72).toInt(), ViewGroup.LayoutParams.WRAP_CONTENT)
+        dialog.window?.setGravity(android.view.Gravity.CENTER)
 
         val container = dialog.findViewById<LinearLayout>(R.id.containerOptions)
         colorModes.forEachIndexed { idx, name ->
-            val row = LayoutInflater.from(requireContext())
-                .inflate(R.layout.item_color_option, container, false)
+            val row = LayoutInflater.from(requireContext()).inflate(R.layout.item_color_option, container, false)
             val textOpt = row.findViewById<TextView>(R.id.textOption)
             val iconCheck = row.findViewById<ImageView>(R.id.iconCheck)
             textOpt.text = name
             if (idx == selected) {
-                textOpt.setTextColor(Color.parseColor("#3F7FFF"))
+                // miuix: selected = primary #277AF7
+                textOpt.setTextColor(Color.parseColor("#277AF7"))
                 iconCheck.visibility = View.VISIBLE
             } else {
-                textOpt.setTextColor(Color.parseColor("#CCCCDD"))
+                // miuix: unselected = onSurface ~ #F2F2F2 in dark
+                textOpt.setTextColor(Color.parseColor("#F2F2F2"))
                 iconCheck.visibility = View.GONE
             }
             row.setOnClickListener {
-                val prefs = requireContext().getSharedPreferences(MainActivity.PREFS_NAME, Context.MODE_PRIVATE)
                 prefs.edit().putInt(MainActivity.KEY_COLOR_MODE, idx).apply()
-                AppCompatDelegate.setDefaultNightMode(MainActivity.nightModeFor(idx))
-                binding.prefColorModeValue.text = colorModes[idx]
+                binding.prefColorModeValue.text = name
                 dialog.dismiss()
-                requireActivity().recreate()
+                // Apply and recreate — must post to avoid dismissal race
+                binding.root.postDelayed({
+                    AppCompatDelegate.setDefaultNightMode(MainActivity.nightModeFor(idx))
+                    requireActivity().recreate()
+                }, 100)
             }
             container.addView(row)
         }

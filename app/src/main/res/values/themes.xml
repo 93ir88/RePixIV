@@ -2,19 +2,39 @@
 <resources>
     <style name="Theme.RePixIV" parent="Theme.MaterialComponents.DayNight.NoActionBar">
         <item name="colorPrimary">@color/primary</item>
-        <item name="colorPrimaryVariant">@color/primary_variant</item>
         <item name="colorOnPrimary">@color/white</item>
-        <item name="colorSecondary">@color/accent</item>
-        <item name="colorOnSecondary">@color/white</item>
         <item name="android:colorBackground">@color/background</item>
         <item name="colorSurface">@color/surface</item>
         <item name="colorOnSurface">@color/text_primary</item>
         <item name="android:statusBarColor">@color/background</item>
         <item name="android:navigationBarColor">@color/nav_background</item>
+        <item name="android:windowLightStatusBar">@bool/is_light_mode</item>
+        <item name="bottomNavigationStyle">@style/MiuixBottomNav</item>
     </style>
 
-    <!-- Removes the pill/bubble indicator on the selected nav item -->
-    <style name="NavNoIndicator">
+    <!-- Removes pill indicator, matches miuix nav bar style -->
+    <style name="MiuixBottomNav" parent="Widget.MaterialComponents.BottomNavigationView">
+        <item name="itemActiveIndicatorStyle">@style/NavNoIndicator</item>
+        <item name="elevation">0dp</item>
+        <item name="itemIconSize">26dp</item>
+        <item name="itemTextAppearanceActive">@style/NavTextActive</item>
+        <item name="itemTextAppearanceInactive">@style/NavTextInactive</item>
+    </style>
+
+    <style name="NavNoIndicator" parent="">
         <item name="android:color">@android:color/transparent</item>
+        <item name="android:height">0dp</item>
+    </style>
+
+    <style name="NavTextActive">
+        <item name="android:textSize">12sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="fontFamily">sans-serif-medium</item>
+    </style>
+
+    <style name="NavTextInactive">
+        <item name="android:textSize">12sp</item>
+        <item name="android:textStyle">normal</item>
+        <item name="fontFamily">sans-serif</item>
     </style>
 </resources>
