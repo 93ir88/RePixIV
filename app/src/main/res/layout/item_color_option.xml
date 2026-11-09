@@ -2,9 +2,9 @@
 <FrameLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="64dp"
-    android:paddingStart="22dp"
-    android:paddingEnd="22dp"
+    android:layout_height="48dp"
+    android:paddingStart="20dp"
+    android:paddingEnd="20dp"
     android:background="?attr/selectableItemBackground">
 
     <TextView
@@ -12,7 +12,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="center_vertical|start"
-        android:textSize="16sp"/>
+        android:textSize="14sp"/>
 
     <ImageView
         android:id="@+id/iconCheck"

@@ -62,9 +62,8 @@ class SettingsFragment : Fragment() {
         dialog.setContentView(R.layout.dialog_color_mode)
         dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
 
-        // Miuix OverlayDropdownPreference popup: compact rounded panel centered
-        // over the screen, with a checkmark on the currently selected option.
-        dialog.window?.setGravity(Gravity.CENTER)
+        // Match Miuix OverlayDropdownPreference: an anchored overlay dropdown,
+        // aligned to the end of the Color Mode row (not a centered dialog).
         dialog.window?.setDimAmount(0.40f)
         dialog.setCancelable(true)
         dialog.setCanceledOnTouchOutside(true)
@@ -94,7 +93,20 @@ class SettingsFragment : Fragment() {
         }
         dialog.show()
         val popupW = (resources.displayMetrics.widthPixels * 0.62f).toInt()
-        dialog.window?.setLayout(popupW, ViewGroup.LayoutParams.WRAP_CONTENT)
+        val location = IntArray(2)
+        binding.rowColorMode.getLocationOnScreen(location)
+        val statusBarInset = ViewCompat.getRootWindowInsets(binding.root)
+            ?.getInsets(WindowInsetsCompat.Type.statusBars())?.top ?: 0
+        val x = (location[0] + binding.rowColorMode.width - popupW).coerceAtLeast(0)
+        val y = (location[1] + binding.rowColorMode.height - statusBarInset).coerceAtLeast(0)
+        dialog.window?.apply {
+            setLayout(popupW, ViewGroup.LayoutParams.WRAP_CONTENT)
+            setGravity(Gravity.TOP or Gravity.START)
+            attributes = attributes.apply {
+                this.x = x
+                this.y = y
+            }
+        }
     }
 
     override fun onDestroyView() { super.onDestroyView(); _binding = null }
