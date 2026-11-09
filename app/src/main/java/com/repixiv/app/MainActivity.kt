@@ -4,7 +4,6 @@ import android.content.Context
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
-import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.view.ViewCompat
@@ -16,6 +15,7 @@ import androidx.navigation.fragment.NavHostFragment
 import androidx.navigation.ui.setupWithNavController
 import com.google.android.material.color.DynamicColors
 import com.repixiv.app.databinding.ActivityMainBinding
+import eightbitlab.com.blurview.BlurView
 import eightbitlab.com.blurview.RenderEffectBlur
 import eightbitlab.com.blurview.RenderScriptBlur
 import android.view.ViewGroup
@@ -25,28 +25,22 @@ class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
 
     override fun attachBaseContext(newBase: Context) {
-        // 1. Read mode from prefs
+        // Apply Monet dynamic colors on API 31+ for Monet modes
         val prefs = newBase.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val mode = prefs.getInt(KEY_COLOR_MODE, 0)
-
-        // 2. Apply night mode BEFORE super (standard AppCompat pattern)
-        AppCompatDelegate.setDefaultNightMode(nightModeFor(mode))
-
-        // 3. Wrap context with Monet dynamic colors for modes 3-5 on Android 12+
-        //    Use try-catch — DynamicColors may not apply if theme is incompatible
-        val ctx = try {
-            if (mode >= 3 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                DynamicColors.wrapContextIfAvailable(newBase) ?: newBase
-            } else newBase
-        } catch (e: Exception) { newBase }
-
+        // Monet is optional: a broken/unsupported dynamic-color overlay must never
+        // prevent the app from starting. Keep the selected light/dark mode as fallback.
+        val ctx = if (mode >= 3 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            runCatching { DynamicColors.wrapContextIfAvailable(newBase) }.getOrDefault(newBase)
+        } else newBase
         super.attachBaseContext(ctx)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        applyColorMode()
         super.onCreate(savedInstanceState)
 
-        // Edge-to-edge
+        // Edge-to-edge: content draws behind system bars
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.statusBarColor = Color.TRANSPARENT
         window.navigationBarColor = Color.TRANSPARENT
@@ -67,26 +61,36 @@ class MainActivity : AppCompatActivity() {
         val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val mode = prefs.getInt(KEY_COLOR_MODE, 0)
         val isDark = when (mode) {
-            1, 4 -> false
-            2, 5 -> true
+            1, 4 -> false   // Light, MonetLight
+            2, 5 -> true    // Dark, MonetDark
             else -> (resources.configuration.uiMode and
                 android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
                 android.content.res.Configuration.UI_MODE_NIGHT_YES
         }
-        // miuix PuredThinGlass overlay — from GlassMaterials.kt
-        val overlayColor = if (isDark) Color.argb(0xB8, 0x28, 0x28, 0x28)
-                           else        Color.argb(0x88, 0xEE, 0xEE, 0xEE)
+
+        // miuix PuredThinGlass overlay colors (from GlassMaterials.kt)
+        // Dark:  0x1A000000 PlusDarker + 0x66565656 Lum + 0x993F3F3F Overlay → ~#B8282828
+        // Light: 0x05000000 PlusDarker + 0x99FFFFFF SoftLight + 0x66FFFFFF HardLight → ~#88EEEEEE
+        val overlayColor = if (isDark)
+            Color.argb(0xB8, 0x28, 0x28, 0x28)
+        else
+            Color.argb(0x88, 0xEE, 0xEE, 0xEE)
 
         val rootView = window.decorView.rootView as ViewGroup
         @Suppress("DEPRECATION")
-        val algorithm = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
-            RenderEffectBlur() else RenderScriptBlur(this)
+        val algorithm = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            RenderEffectBlur()
+        } else {
+            RenderScriptBlur(this)
+        }
 
+        // miuix PuredThinGlass blurRadius = 20.dp
         binding.navBlurView.setupWith(rootView, algorithm)
             .setBlurRadius(20f)
             .setOverlayColor(overlayColor)
             .setBlurAutoUpdate(true)
 
+        // Bottom nav itself is transparent — blur view shows through
         binding.bottomNavigation.setBackgroundColor(Color.TRANSPARENT)
     }
 
@@ -94,15 +98,28 @@ class MainActivity : AppCompatActivity() {
         ViewCompat.setOnApplyWindowInsetsListener(binding.root) { _, insets ->
             val sysBottom = insets.getInsets(WindowInsetsCompat.Type.systemBars()).bottom
             val navBarHeight = resources.getDimensionPixelSize(R.dimen.nav_bar_height)
-            val total = navBarHeight + sysBottom
-            binding.navBlurView.updateLayoutParams { height = total }
-            binding.bottomNavigation.updateLayoutParams { height = total }
+            val totalNavHeight = navBarHeight + sysBottom
+
+            // Expand blur view to cover nav bar + system gesture area
+            binding.navBlurView.updateLayoutParams { height = totalNavHeight }
+
+            // Push BNV content up by system inset (gesture pill / button bar)
+            binding.bottomNavigation.updateLayoutParams { height = totalNavHeight }
             binding.bottomNavigation.updatePadding(bottom = sysBottom)
+
+            // Move divider to sit at top of blur area
             binding.navDivider.updateLayoutParams<android.widget.FrameLayout.LayoutParams> {
-                bottomMargin = total
+                bottomMargin = totalNavHeight
             }
+
             WindowInsetsCompat.CONSUMED
         }
+    }
+
+    private fun applyColorMode() {
+        val prefs = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val mode = prefs.getInt(KEY_COLOR_MODE, 0)
+        AppCompatDelegate.setDefaultNightMode(nightModeFor(mode))
     }
 
     companion object {
