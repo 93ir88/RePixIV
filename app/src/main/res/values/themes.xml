@@ -6,22 +6,26 @@
         <item name="android:colorBackground">@color/background</item>
         <item name="colorSurface">@color/surface</item>
         <item name="colorOnSurface">@color/text_primary</item>
-        <!-- Transparent status/nav bars — edge-to-edge -->
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowLightStatusBar">@bool/is_light_mode</item>
         <item name="bottomNavigationStyle">@style/MiuixBottomNav</item>
     </style>
 
-    <!-- miuix NavigationBar exact spec: no pill indicator, 64dp items, 26dp icons, 12sp text -->
+    <!-- miuix NavigationBar exact spec:
+         ItemHeight=64dp, IconSize=26dp, LabelFontSize=12sp,
+         IconTopPadding=8dp, BottomPadding=8dp, UnselectedAlpha=0.4 -->
     <style name="MiuixBottomNav" parent="Widget.MaterialComponents.BottomNavigationView">
         <item name="itemActiveIndicatorStyle">@style/NavNoIndicator</item>
         <item name="elevation">0dp</item>
         <item name="itemIconSize">26dp</item>
-        <item name="itemTextAppearanceActive">@style/NavTextActive</item>
-        <item name="itemTextAppearanceInactive">@style/NavTextInactive</item>
+        <!-- itemPaddingTop / itemPaddingBottom control space above icon and below text.
+             Setting both to 8dp matches miuix IconTopPadding=8dp + BottomPadding=8dp,
+             which pulls the text visually close to the icon (no extra dead space). -->
         <item name="itemPaddingTop">8dp</item>
         <item name="itemPaddingBottom">8dp</item>
+        <item name="itemTextAppearanceActive">@style/NavTextActive</item>
+        <item name="itemTextAppearanceInactive">@style/NavTextInactive</item>
     </style>
 
     <style name="NavNoIndicator" parent="">
@@ -29,7 +33,7 @@
         <item name="android:height">0dp</item>
     </style>
 
-    <!-- miuix: selected = bold, unselected = normal, 12sp -->
+    <!-- miuix: bold for selected, normal for unselected, 12sp (LabelFontSize) -->
     <style name="NavTextActive">
         <item name="android:textSize">12sp</item>
         <item name="android:textStyle">bold</item>

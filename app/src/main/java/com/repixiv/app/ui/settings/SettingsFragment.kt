@@ -1,6 +1,5 @@
 package com.repixiv.app.ui.settings
 
-import android.app.Dialog
 import android.content.Context
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
@@ -21,6 +20,7 @@ class SettingsFragment : Fragment() {
     private var _binding: FragmentSettingsBinding? = null
     private val binding get() = _binding!!
     private val colorModes = listOf("System","Light","Dark","MonetSystem","MonetLight","MonetDark")
+    private var popup: PopupWindow? = null
 
     override fun onCreateView(i: LayoutInflater, c: ViewGroup?, s: Bundle?): View {
         _binding = FragmentSettingsBinding.inflate(i, c, false)
@@ -29,18 +29,19 @@ class SettingsFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        // Bottom padding so settings aren't hidden behind nav bar
         ViewCompat.setOnApplyWindowInsetsListener(binding.root) { v, insets ->
             val bottom = insets.getInsets(WindowInsetsCompat.Type.systemBars()).bottom
             v.updatePadding(bottom = resources.getDimensionPixelSize(R.dimen.nav_bar_height) + bottom)
             insets
         }
         val prefs = requireContext().getSharedPreferences(MainActivity.PREFS_NAME, Context.MODE_PRIVATE)
-        binding.prefColorModeValue.text = colorModes[prefs.getInt(MainActivity.KEY_COLOR_MODE, 0)]
-        binding.rowColorMode.setOnClickListener { showColorModeDialog() }
+        binding.prefColorModeValue.text = colorModes[prefs.getInt(MainActivity.KEY_COLOR_MODE, 0).coerceIn(0, 5)]
+        binding.rowColorMode.setOnClickListener { showColorModePopup() }
     }
 
-    private fun isDarkMode(): Boolean {
+    private fun dp(value: Int) = (value * resources.displayMetrics.density + 0.5f).toInt()
+
+    private fun isDark(): Boolean {
         val prefs = requireContext().getSharedPreferences(MainActivity.PREFS_NAME, Context.MODE_PRIVATE)
         return when (prefs.getInt(MainActivity.KEY_COLOR_MODE, 0)) {
             2, 5 -> true
@@ -51,48 +52,61 @@ class SettingsFragment : Fragment() {
         }
     }
 
-    private fun showColorModeDialog() {
+    private fun showColorModePopup() {
+        popup?.dismiss()
         val prefs = requireContext().getSharedPreferences(MainActivity.PREFS_NAME, Context.MODE_PRIVATE)
-        val selected = prefs.getInt(MainActivity.KEY_COLOR_MODE, 0)
-        val dark = isDarkMode()
+        val selected = prefs.getInt(MainActivity.KEY_COLOR_MODE, 0).coerceIn(0, 5)
+        val dark = isDark()
 
-        val dialog = Dialog(requireContext())
-        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
-        dialog.setContentView(R.layout.dialog_color_mode)
-        dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+        // miuix DropdownDefaults colors
+        // selectedContentColor = primary = #277AF7
+        // contentColor = onSurfaceContainer = dark:#E6FFFFFF, light:#E6000000
+        val selectedColor = Color.parseColor("#277AF7")
+        val unselectedColor = if (dark) Color.parseColor("#E0E0E0") else Color.parseColor("#1A1A1A")
 
-        // miuix popup: ~60% width, anchored near preference row
-        val screenW = resources.displayMetrics.widthPixels
-        val popupW = (screenW * 0.62).toInt()
-        dialog.window?.setLayout(popupW, ViewGroup.LayoutParams.WRAP_CONTENT)
-        dialog.window?.setGravity(Gravity.CENTER)
-        dialog.window?.setDimAmount(0.4f)
-
-        val container = dialog.findViewById<LinearLayout>(R.id.containerOptions)
-        val selectedBlue = Color.parseColor("#277AF7")
-        val unselectedColor = if (dark) Color.parseColor("#F2F2F2") else Color.parseColor("#1A1A1A")
+        // Inflate popup view
+        val popupView = LayoutInflater.from(requireContext()).inflate(R.layout.popup_color_mode, null)
+        val container = popupView.findViewById<LinearLayout>(R.id.containerOptions)
 
         colorModes.forEachIndexed { idx, name ->
             val row = LayoutInflater.from(requireContext()).inflate(R.layout.item_color_option, container, false)
-            row.findViewById<TextView>(R.id.textOption).apply {
-                text = name
-                setTextColor(if (idx == selected) selectedBlue else unselectedColor)
-            }
-            row.findViewById<android.widget.ImageView>(R.id.iconCheck).visibility =
-                if (idx == selected) android.view.View.VISIBLE else android.view.View.GONE
+            val textOpt = row.findViewById<TextView>(R.id.textOption)
+            val iconCheck = row.findViewById<ImageView>(R.id.iconCheck)
+            textOpt.text = name
+            textOpt.setTextColor(if (idx == selected) selectedColor else unselectedColor)
+            iconCheck.visibility = if (idx == selected) View.VISIBLE else View.GONE
             row.setOnClickListener {
                 prefs.edit().putInt(MainActivity.KEY_COLOR_MODE, idx).apply()
                 binding.prefColorModeValue.text = name
-                dialog.dismiss()
+                popup?.dismiss()
                 binding.root.postDelayed({
                     AppCompatDelegate.setDefaultNightMode(MainActivity.nightModeFor(idx))
                     requireActivity().recreate()
-                }, 100)
+                }, 80)
             }
             container.addView(row)
         }
-        dialog.show()
+
+        // miuix ListPopupColumn: width auto-sizes between 200dp–288dp
+        // Using 288dp (max) since we have 6 items with similar text lengths
+        val popupWidth = dp(288)
+
+        val pw = PopupWindow(popupView, popupWidth, ViewGroup.LayoutParams.WRAP_CONTENT, true)
+        pw.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+        pw.elevation = dp(8).toFloat()
+        pw.isOutsideTouchable = true
+        pw.inputMethodMode = PopupWindow.INPUT_METHOD_NOT_NEEDED
+
+        // miuix Align.End: right-aligned to anchor, 8dp vertical gap below
+        // xoff = anchor.width - popupWidth → right edge of popup aligns with right of anchor
+        val xoff = binding.rowColorMode.width - popupWidth
+        pw.showAsDropDown(binding.rowColorMode, xoff, dp(8))
+        popup = pw
     }
 
-    override fun onDestroyView() { super.onDestroyView(); _binding = null }
+    override fun onDestroyView() {
+        popup?.dismiss()
+        super.onDestroyView()
+        _binding = null
+    }
 }

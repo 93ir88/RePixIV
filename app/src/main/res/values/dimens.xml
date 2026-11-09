@@ -2,4 +2,6 @@
 <resources>
     <!-- miuix NavigationBar ItemHeight = 64dp -->
     <dimen name="nav_bar_height">64dp</dimen>
+    <!-- miuix ListPopupColumn maxWidth = 288dp -->
+    <dimen name="popup_max_width">288dp</dimen>
 </resources>
