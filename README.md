@@ -14,7 +14,12 @@ Toolchain mirrors Miuix: JDK 21, Gradle 9.9.0, AGP 9.5.1, Kotlin 2.4.21, compile
 ## Features
 - **Log in with pixiv** (OAuth + PKCE through the official web login page), or paste a refresh token.
 - **Home**: your personalized pixiv recommendations (infinite scroll). **Search**: tag/keyword search.
-  **Profile**: your account stats and public bookmarks. Tap an artwork to open it on pixiv.net.
+  **Profile**: your account stats and public bookmarks, with an account-settings button (top right).
+- Everything opens inside the app: tap a post for the full-screen zoomable viewer, tap an artist's
+  avatar for their page (follow / unfollow).
+- Per-post menu: Download (original quality, saved to Pictures/RePixIV), View full screen,
+  Not interested (hides the post and similar ones, stored on-device) and Share (link).
+- Account settings: restricted mode and AI-generated works (synced with pixiv), account info.
 - Tabs swipe like the Miuix example app.
 
 ## Settings

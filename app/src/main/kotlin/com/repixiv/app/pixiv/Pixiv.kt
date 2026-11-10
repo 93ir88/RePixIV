@@ -31,6 +31,9 @@ data class Illust(
     val views: Int,
     val tags: List<String>,
     val pageCount: Int,
+    val userId: Long,
+    val largeUrls: List<String>,
+    val originalUrls: List<String>,
 )
 
 data class IllustPage(val items: List<Illust>, val nextUrl: String?)
@@ -43,6 +46,7 @@ data class UserDetail(
     val following: Int,
     val illusts: Int,
     val bookmarks: Int,
+    val isFollowed: Boolean,
 )
 
 data class Session(
@@ -177,7 +181,50 @@ object Pixiv {
             following = p?.optInt("total_follow_users") ?: 0,
             illusts = p?.optInt("total_illusts") ?: 0,
             bookmarks = p?.optInt("total_illust_bookmarks_public") ?: 0,
+            isFollowed = u.optBoolean("is_followed"),
         )
+    }
+
+    suspend fun userIllusts(userId: Long, nextUrl: String? = null): IllustPage = withContext(Dispatchers.IO) {
+        page(get(nextUrl ?: "$API/v1/user/illusts?user_id=$userId&type=illust&filter=for_android"))
+    }
+
+    suspend fun setFollow(userId: Long, follow: Boolean) = withContext(Dispatchers.IO) {
+        if (follow) {
+            call("POST", "$API/v1/user/follow/add", mapOf("user_id" to userId.toString(), "restrict" to "public"))
+        } else {
+            call("POST", "$API/v1/user/follow/delete", mapOf("user_id" to userId.toString()))
+        }
+        Unit
+    }
+
+    suspend fun restrictedMode(): Boolean = withContext(Dispatchers.IO) {
+        get("$API/v1/user/restricted-mode-settings").optBoolean("is_restricted_mode_enabled")
+    }
+
+    suspend fun setRestrictedMode(enabled: Boolean) = withContext(Dispatchers.IO) {
+        call("POST", "$API/v1/user/restricted-mode-settings", mapOf("is_restricted_mode_enabled" to enabled.toString()))
+        Unit
+    }
+
+    suspend fun showAi(): Boolean = withContext(Dispatchers.IO) {
+        get("$API/v1/user/ai-show-settings").optBoolean("show_ai", true)
+    }
+
+    suspend fun setShowAi(show: Boolean) = withContext(Dispatchers.IO) {
+        call("POST", "$API/v1/user/ai-show-settings/edit", mapOf("show_ai" to show.toString()))
+        Unit
+    }
+
+    /** Best-effort read of account flags (only the keys pixiv actually returns are included). */
+    suspend fun accountState(): Map<String, Boolean> = withContext(Dispatchers.IO) {
+        val j = get("$API/v1/user/me/state")
+        val st = j.optJSONObject("user_state") ?: j
+        val out = LinkedHashMap<String, Boolean>()
+        for (k in listOf("has_mail_address", "mail_authorized", "has_password", "is_premium")) {
+            if (st.has(k)) out[k] = st.optBoolean(k)
+        }
+        out
     }
 
     // ---------- internals ----------
@@ -196,31 +243,51 @@ object Pixiv {
         val tagsArr = o.optJSONArray("tags")
         val tags = ArrayList<String>()
         if (tagsArr != null) for (i in 0 until tagsArr.length()) tags += tagsArr.getJSONObject(i).optString("name")
+        val imageUrl = img.optString("large").ifEmpty { img.optString("medium") }
+        val large = ArrayList<String>()
+        val orig = ArrayList<String>()
+        val metaPages = o.optJSONArray("meta_pages")
+        if (metaPages != null && metaPages.length() > 0) {
+            for (i in 0 until metaPages.length()) {
+                val urls = metaPages.getJSONObject(i).getJSONObject("image_urls")
+                val l = urls.optString("large").ifEmpty { urls.optString("medium") }
+                large += l
+                orig += urls.optString("original").ifEmpty { l }
+            }
+        } else {
+            large += imageUrl
+            orig += (o.optJSONObject("meta_single_page")?.optString("original_image_url").orEmpty()).ifEmpty { imageUrl }
+        }
         return Illust(
             id = o.getLong("id"),
             title = o.optString("title"),
             userName = user.optString("name"),
             userAvatar = user.optJSONObject("profile_image_urls")?.optString("medium").orEmpty(),
-            imageUrl = img.optString("large").ifEmpty { img.optString("medium") },
+            imageUrl = imageUrl,
             width = o.optInt("width", 1).coerceAtLeast(1),
             height = o.optInt("height", 1).coerceAtLeast(1),
             bookmarks = o.optInt("total_bookmarks"),
             views = o.optInt("total_view"),
             tags = tags,
             pageCount = o.optInt("page_count", 1),
+            userId = user.optLong("id"),
+            largeUrls = large,
+            originalUrls = orig,
         )
     }
 
-    private fun get(url: String): JSONObject {
+    private fun get(url: String): JSONObject = call("GET", url)
+
+    private fun call(method: String, url: String, form: Map<String, String>? = null): JSONObject {
         var s = session ?: throw PixivException("Not logged in")
         if (System.currentTimeMillis() > s.expiresAt - 60_000) s = refresh(s)
-        var res = http("GET", url, baseHeaders() + ("Authorization" to "Bearer ${s.accessToken}"))
+        var res = http(method, url, baseHeaders() + ("Authorization" to "Bearer ${s.accessToken}"), form)
         if (res.first == 400 || res.first == 401) {
             s = refresh(s)
-            res = http("GET", url, baseHeaders() + ("Authorization" to "Bearer ${s.accessToken}"))
+            res = http(method, url, baseHeaders() + ("Authorization" to "Bearer ${s.accessToken}"), form)
         }
         if (res.first !in 200..299) throw PixivException(errorMessage(res.second, res.first), res.first)
-        return JSONObject(res.second)
+        return if (res.second.isBlank()) JSONObject() else JSONObject(res.second)
     }
 
     @Synchronized

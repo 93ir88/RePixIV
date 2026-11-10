@@ -6,6 +6,8 @@
 package com.repixiv.app.pages
 
 import android.content.Intent
+import android.widget.Toast
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -44,6 +46,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.repixiv.app.LocalAppState
+import com.repixiv.app.LocalNavigator
+import com.repixiv.app.Screen
+import com.repixiv.app.pixiv.Downloader
 import com.repixiv.app.LoginActivity
 import com.repixiv.app.pixiv.FeedState
 import com.repixiv.app.pixiv.Illust
@@ -61,6 +66,10 @@ import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.DropdownImpl
+import top.yukonga.miuix.kmp.basic.DropdownItem
+import top.yukonga.miuix.kmp.basic.ListPopupColumn
+import top.yukonga.miuix.kmp.basic.PopupPositionProvider
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
@@ -72,13 +81,20 @@ import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Download
 import top.yukonga.miuix.kmp.icon.extended.Favorites
+import top.yukonga.miuix.kmp.icon.extended.Hide
+import top.yukonga.miuix.kmp.icon.extended.Image
+import top.yukonga.miuix.kmp.icon.extended.More
+import top.yukonga.miuix.kmp.icon.extended.Settings
+import top.yukonga.miuix.kmp.icon.extended.Share
 import top.yukonga.miuix.kmp.icon.extended.Refresh
 import top.yukonga.miuix.kmp.icon.extended.Show
+import top.yukonga.miuix.kmp.overlay.OverlayListPopup
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
-private fun PageScaffold(
+internal fun PageScaffold(
     title: String,
     padding: PaddingValues,
     actions: @Composable RowScope.() -> Unit = {},
@@ -119,7 +135,7 @@ private fun PageScaffold(
 // ---------------------------------------------------------------- shared pieces
 
 @Composable
-private fun LoginPrompt(message: String, modifier: Modifier = Modifier) {
+internal fun LoginPrompt(message: String, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var showToken by remember { mutableStateOf(false) }
@@ -184,26 +200,89 @@ private fun LoginPrompt(message: String, modifier: Modifier = Modifier) {
     }
 }
 
-private fun fmt(n: Int): String = when {
+internal fun fmt(n: Int): String = when {
     n >= 1_000_000 -> "${"%.1f".format(n / 1_000_000.0)}M"
     n >= 1_000 -> "${"%.1f".format(n / 1_000.0)}K"
     else -> n.toString()
 }
 
 @Composable
-private fun IllustCard(a: Illust) {
-    val uriHandler = LocalUriHandler.current
+internal fun IllustCard(a: Illust, onNotInterested: () -> Unit) {
+    val nav = LocalNavigator.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val summary = MiuixTheme.colorScheme.onSurfaceVariantSummary
+    val tint = MiuixTheme.colorScheme.onSurface
+    var showMenu by remember { mutableStateOf(false) }
+
     Card(
         modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp),
-        onClick = { uriHandler.openUri("https://www.pixiv.net/artworks/${a.id}") },
+        onClick = { nav.push(Screen.Viewer(a)) },
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                RemoteImage(a.userAvatar, true, Modifier.size(40.dp).clip(CircleShape))
-                Column(modifier = Modifier.padding(start = 12.dp)) {
+                Box(Modifier.size(40.dp).clip(CircleShape).clickable { nav.openUser(a.userId) }) {
+                    RemoteImage(a.userAvatar, true, Modifier.fillMaxSize())
+                }
+                Column(modifier = Modifier.padding(start = 12.dp).weight(1f)) {
                     Text(a.userName, style = MiuixTheme.textStyles.body1, fontSize = 15.sp, maxLines = 1)
                     Text(a.title, color = summary, fontSize = 13.sp, maxLines = 1)
+                }
+                Box {
+                    IconButton(onClick = { showMenu = true }) {
+                        Icon(imageVector = MiuixIcons.More, contentDescription = "More", tint = tint)
+                    }
+                    val entries = listOf<Pair<DropdownItem, () -> Unit>>(
+                        DropdownItem(
+                            text = "Download",
+                            icon = { m -> Icon(imageVector = MiuixIcons.Download, contentDescription = null, modifier = m, tint = tint) },
+                        ) to {
+                            Toast.makeText(context, "Downloading…", Toast.LENGTH_SHORT).show()
+                            scope.launch { Toast.makeText(context, Downloader.save(context, a), Toast.LENGTH_LONG).show() }
+                            Unit
+                        },
+                        DropdownItem(
+                            text = "View full screen",
+                            icon = { m -> Icon(imageVector = MiuixIcons.Image, contentDescription = null, modifier = m, tint = tint) },
+                        ) to { nav.push(Screen.Viewer(a)) },
+                        DropdownItem(
+                            text = "Not interested",
+                            icon = { m -> Icon(imageVector = MiuixIcons.Hide, contentDescription = null, modifier = m, tint = tint) },
+                        ) to {
+                            onNotInterested()
+                            Toast.makeText(context, "Got it, you'll see less like this", Toast.LENGTH_SHORT).show()
+                        },
+                        DropdownItem(
+                            text = "Share",
+                            icon = { m -> Icon(imageVector = MiuixIcons.Share, contentDescription = null, modifier = m, tint = tint) },
+                        ) to {
+                            val send = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_TEXT, "${a.title} by ${a.userName}\nhttps://www.pixiv.net/artworks/${a.id}")
+                            }
+                            context.startActivity(Intent.createChooser(send, "Share"))
+                        },
+                    )
+                    OverlayListPopup(
+                        show = showMenu,
+                        alignment = PopupPositionProvider.Align.End,
+                        onDismissRequest = { showMenu = false },
+                    ) {
+                        ListPopupColumn {
+                            entries.forEachIndexed { index, (item, action) ->
+                                DropdownImpl(
+                                    item = item,
+                                    optionSize = entries.size,
+                                    isSelected = false,
+                                    index = index,
+                                    onSelectedIndexChange = {
+                                        showMenu = false
+                                        action()
+                                    },
+                                )
+                            }
+                        }
+                    }
                 }
             }
             RemoteImage(
@@ -212,8 +291,9 @@ private fun IllustCard(a: Illust) {
                 Modifier
                     .padding(top = 12.dp)
                     .fillMaxWidth()
-                    .aspectRatio((a.width.toFloat() / a.height).coerceIn(0.5f, 2f))
+                    .aspectRatio((a.width.toFloat() / a.height).coerceIn(0.4f, 3f))
                     .clip(RoundedCornerShape(12.dp)),
+                crop = false,
             )
             if (a.tags.isNotEmpty()) {
                 Text(
@@ -238,8 +318,8 @@ private fun IllustCard(a: Illust) {
     }
 }
 
-private fun LazyListScope.illustItems(feed: FeedState, emptyText: String) {
-    items(feed.items, key = { it.id }) { IllustCard(it) }
+internal fun LazyListScope.illustItems(feed: FeedState, emptyText: String) {
+    items(feed.items, key = { it.id }) { IllustCard(it, onNotInterested = { feed.notInterested(it) }) }
     item(key = "footer") {
         val scope = rememberCoroutineScope()
         val next = feed.nextUrl
@@ -270,7 +350,7 @@ private fun LazyListScope.illustItems(feed: FeedState, emptyText: String) {
 fun FeedPage(padding: PaddingValues) {
     val session = Pixiv.session
     val scope = rememberCoroutineScope()
-    val feed = remember(session?.userId) { FeedState { Pixiv.recommended(it) } }
+    val feed = remember(session?.userId) { FeedState(applyFilters = true) { Pixiv.recommended(it) } }
     LaunchedEffect(feed) { if (Pixiv.session != null) feed.refresh() }
 
     PageScaffold(
@@ -303,7 +383,7 @@ fun SearchPage(padding: PaddingValues) {
     val session = Pixiv.session
     var query by remember { mutableStateOf(TextFieldValue("")) }
     var submitted by remember { mutableStateOf("") }
-    val feed = remember(submitted, session?.userId) { FeedState { Pixiv.search(submitted, it) } }
+    val feed = remember(submitted, session?.userId) { FeedState(applyFilters = true) { Pixiv.search(submitted, it) } }
     LaunchedEffect(feed) { if (submitted.isNotBlank() && Pixiv.session != null) feed.refresh() }
     val keyboard = LocalSoftwareKeyboardController.current
 
@@ -353,7 +433,18 @@ fun SearchPage(padding: PaddingValues) {
 @Composable
 fun ProfilePage(padding: PaddingValues) {
     val session = Pixiv.session
-    PageScaffold(title = "Profile", padding = padding) { contentPadding, scrollModifier ->
+    val nav = LocalNavigator.current
+    PageScaffold(
+        title = "Profile",
+        padding = padding,
+        actions = {
+            if (session != null) {
+                IconButton(onClick = { nav.push(Screen.AccountSettings) }) {
+                    Icon(MiuixIcons.Settings, "Account settings", tint = MiuixTheme.colorScheme.onSurface)
+                }
+            }
+        },
+    ) { contentPadding, scrollModifier ->
         if (session == null) {
             Box(Modifier.fillMaxSize().padding(contentPadding), contentAlignment = Alignment.Center) {
                 LoginPrompt("Log in to view your pixiv profile")
@@ -424,7 +515,7 @@ private fun ProfileContent(session: Session, contentPadding: PaddingValues, scro
 }
 
 @Composable
-private fun Stat(label: String, value: Int) {
+internal fun Stat(label: String, value: Int) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(fmt(value), style = MiuixTheme.textStyles.title4)
         Text(label, color = MiuixTheme.colorScheme.onSurfaceVariantSummary, fontSize = 12.sp)

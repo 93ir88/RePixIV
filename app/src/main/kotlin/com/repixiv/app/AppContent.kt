@@ -27,6 +27,10 @@ import androidx.compose.foundation.pager.PagerDefaults
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.runtime.key
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
@@ -42,6 +46,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalLayoutDirection
 import com.repixiv.app.ui.isInDarkTheme
+import com.repixiv.app.pages.AccountSettingsScreen
+import com.repixiv.app.pages.UserScreen
+import com.repixiv.app.pages.ViewerScreen
 import com.repixiv.app.pages.FeedPage
 import com.repixiv.app.pages.ProfilePage
 import com.repixiv.app.pages.SearchPage
@@ -102,12 +109,38 @@ fun AppContent(padding: PaddingValues) {
         )
     }
 
-    CompactScreenLayout(
-        navigationItems = navigationItems,
-        padding = padding,
-        mainPagerState = mainPagerState,
-    )
+    val nav = remember { Navigator() }
+    CompositionLocalProvider(LocalNavigator provides nav) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            CompactScreenLayout(
+                navigationItems = navigationItems,
+                padding = padding,
+                mainPagerState = mainPagerState,
+            )
+            OverlayHost(nav)
+        }
+    }
+    BackHandler(enabled = nav.stack.isNotEmpty()) { nav.pop() }
 
+}
+
+@Composable
+private fun OverlayHost(nav: Navigator) {
+    val top = nav.stack.lastOrNull() ?: return
+    key(top) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MiuixTheme.colorScheme.surface)
+                .pointerInput(Unit) { detectTapGestures { } },
+        ) {
+            when (top) {
+                is Screen.Viewer -> ViewerScreen(top.illust, top.page)
+                is Screen.User -> UserScreen(top.userId)
+                Screen.AccountSettings -> AccountSettingsScreen()
+            }
+        }
+    }
 }
 
 @Composable
