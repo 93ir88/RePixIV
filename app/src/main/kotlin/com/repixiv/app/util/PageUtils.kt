@@ -58,6 +58,7 @@ fun AdaptiveTopAppBar(
     subtitle: String = "",
     color: Color = MiuixTheme.colorScheme.surface,
     navigationIcon: @Composable () -> Unit = {},
+    bottomContent: @Composable () -> Unit = {},
     actions: @Composable RowScope.() -> Unit = {},
 ) {
     if (!showTopAppBar) return
@@ -67,6 +68,7 @@ fun AdaptiveTopAppBar(
         color = color,
         scrollBehavior = scrollBehavior,
         navigationIcon = navigationIcon,
+        bottomContent = bottomContent,
         actions = actions,
     )
 }

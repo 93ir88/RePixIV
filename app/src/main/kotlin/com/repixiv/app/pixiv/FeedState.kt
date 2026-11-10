@@ -23,6 +23,10 @@ class FeedState(
     var loaded by mutableStateOf(false)
         private set
 
+    suspend fun ensureLoaded() {
+        if (!loaded && !loading) refresh()
+    }
+
     suspend fun refresh() {
         if (loading) return
         loading = true

@@ -8,6 +8,8 @@ import com.repixiv.app.pixiv.Illust
 sealed interface Screen {
     data class Viewer(val illust: Illust, val page: Int = 0) : Screen
     data class User(val userId: Long) : Screen
+    data class Comments(val illust: Illust) : Screen
+    data class FeedList(val title: String, val kind: String) : Screen
     data object AccountSettings : Screen
 }
 

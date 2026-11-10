@@ -22,6 +22,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.lazy.items
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.TextFieldValue
+import com.repixiv.app.pixiv.Comment
+import com.repixiv.app.pixiv.CommentPreviews
+import top.yukonga.miuix.kmp.basic.TextField
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -57,6 +66,7 @@ import com.bumptech.glide.request.target.CustomTarget
 import com.bumptech.glide.request.transition.Transition
 import com.repixiv.app.LocalAppState
 import com.repixiv.app.LocalNavigator
+import com.repixiv.app.Screen
 import com.repixiv.app.pixiv.Downloader
 import com.repixiv.app.pixiv.FeedState
 import com.repixiv.app.pixiv.Filters
@@ -83,6 +93,8 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.Download
+import top.yukonga.miuix.kmp.icon.extended.Messages
+import top.yukonga.miuix.kmp.icon.extended.Send
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -125,6 +137,10 @@ fun ViewerScreen(illust: Illust, startPage: Int) {
             )
             if (pageCount > 1) {
                 Text("${pagerState.currentPage + 1}/$pageCount", color = Color.White, fontSize = 14.sp)
+            }
+            LikeButton(illust, idleTint = Color.White)
+            IconButton(onClick = { nav.push(Screen.Comments(illust)) }) {
+                Icon(imageVector = MiuixIcons.Messages, contentDescription = "Comments", tint = Color.White)
             }
             IconButton(
                 onClick = {
@@ -221,14 +237,21 @@ private fun ZoomableImage(previewUrl: String, fullUrl: String, onZoomChange: (Bo
     }
 }
 
+// ---------------------------------------------------------------- Shared bits
+
+@Composable
+private fun BackButton() {
+    val nav = LocalNavigator.current
+    IconButton(onClick = { nav.pop() }) {
+        Icon(imageVector = MiuixIcons.Back, contentDescription = "Back", tint = MiuixTheme.colorScheme.onSurface)
+    }
+}
+
 // ---------------------------------------------------------------- Artist page
 
 @Composable
 fun UserScreen(userId: Long) {
-    val nav = LocalNavigator.current
-    val appState = LocalAppState.current
     val scope = rememberCoroutineScope()
-    val scrollBehavior = MiuixScrollBehavior()
     var detail by remember(userId) { mutableStateOf<UserDetail?>(null) }
     var followed by remember(userId) { mutableStateOf(false) }
     var error by remember(userId) { mutableStateOf<String?>(null) }
@@ -250,24 +273,13 @@ fun UserScreen(userId: Long) {
     val summary = MiuixTheme.colorScheme.onSurfaceVariantSummary
     val isMe = Pixiv.session?.userId == userId
 
-    Scaffold(
-        topBar = {
-            AdaptiveTopAppBar(
-                title = detail?.name ?: "Artist",
-                showTopAppBar = true,
-                scrollBehavior = scrollBehavior,
-                navigationIcon = {
-                    IconButton(onClick = { nav.pop() }) {
-                        Icon(imageVector = MiuixIcons.Back, contentDescription = "Back", tint = MiuixTheme.colorScheme.onSurface)
-                    }
-                },
-            )
-        },
-    ) { inner ->
-        LazyColumn(
-            modifier = Modifier.pageScrollModifiers(appState.enableScrollEndHaptic, true, scrollBehavior),
-            contentPadding = PaddingValues(top = inner.calculateTopPadding(), bottom = inner.calculateBottomPadding()),
-        ) {
+    PageScaffold(
+        title = detail?.name ?: "Artist",
+        padding = PaddingValues(0.dp),
+        overlay = true,
+        navigationIcon = { BackButton() },
+    ) { contentPadding, scrollModifier, _ ->
+        LazyColumn(modifier = scrollModifier, contentPadding = contentPadding) {
             item(key = "userCard") {
                 Card(modifier = Modifier.padding(12.dp)) {
                     Column(
@@ -329,6 +341,162 @@ fun UserScreen(userId: Long) {
     }
 }
 
+// ---------------------------------------------------------------- Generic feed list ("Show all", ranking, tag search)
+
+@Composable
+fun FeedListScreen(title: String, kind: String) {
+    val feed = remember(kind) {
+        FeedState(applyFilters = kind != "follow") { next ->
+            when {
+                kind == "follow" -> Pixiv.followFeed(next)
+                kind.startsWith("ranking:") -> Pixiv.ranking(kind.removePrefix("ranking:"), next)
+                kind.startsWith("search:") -> Pixiv.search(kind.removePrefix("search:"), next)
+                else -> Pixiv.recommended(next)
+            }
+        }
+    }
+    LaunchedEffect(feed) { feed.refresh() }
+    PageScaffold(
+        title = title,
+        padding = PaddingValues(0.dp),
+        overlay = true,
+        navigationIcon = { BackButton() },
+    ) { contentPadding, scrollModifier, _ ->
+        LazyColumn(modifier = scrollModifier, contentPadding = contentPadding) {
+            illustItems(feed, "Nothing here yet")
+        }
+    }
+}
+
+// ---------------------------------------------------------------- Comments
+
+@Composable
+fun CommentsScreen(illust: Illust) {
+    val nav = LocalNavigator.current
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val list = remember(illust.id) { mutableStateListOf<Comment>() }
+    var next by remember(illust.id) { mutableStateOf<String?>(null) }
+    var loading by remember(illust.id) { mutableStateOf(false) }
+    var loaded by remember(illust.id) { mutableStateOf(false) }
+    var error by remember(illust.id) { mutableStateOf<String?>(null) }
+    var input by remember(illust.id) { mutableStateOf(TextFieldValue("")) }
+    var sending by remember(illust.id) { mutableStateOf(false) }
+
+    suspend fun load(reset: Boolean) {
+        if (loading) return
+        loading = true
+        error = null
+        try {
+            val p = Pixiv.comments(illust.id, if (reset) null else next)
+            if (reset) list.clear()
+            val seen = list.mapTo(HashSet()) { it.id }
+            list.addAll(p.items.filter { seen.add(it.id) })
+            next = p.nextUrl
+            loaded = true
+            CommentPreviews.cache.remove(illust.id)
+            list.firstOrNull()?.let { CommentPreviews.cache[illust.id] = it }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            error = e.message ?: "Could not load comments"
+        } finally {
+            loading = false
+        }
+    }
+    LaunchedEffect(illust.id) { load(true) }
+
+    fun send() {
+        val text = input.text.trim()
+        if (text.isEmpty() || sending) return
+        sending = true
+        scope.launch {
+            try {
+                Pixiv.addComment(illust.id, text)
+                input = TextFieldValue("")
+                load(true)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Toast.makeText(context, e.message ?: "Could not post comment", Toast.LENGTH_LONG).show()
+            } finally {
+                sending = false
+            }
+        }
+    }
+
+    PageScaffold(
+        title = "Comments",
+        padding = PaddingValues(0.dp),
+        overlay = true,
+        navigationIcon = { BackButton() },
+        bottomBar = {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MiuixTheme.colorScheme.surface)
+                    .navigationBarsPadding()
+                    .imePadding()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TextField(
+                    value = input,
+                    onValueChange = { input = it },
+                    label = "Add a comment…",
+                    useLabelAsPlaceholder = true,
+                    modifier = Modifier.weight(1f),
+                )
+                IconButton(onClick = { send() }, enabled = !sending && input.text.isNotBlank()) {
+                    Icon(
+                        imageVector = MiuixIcons.Send,
+                        contentDescription = "Send",
+                        tint = MiuixTheme.colorScheme.primary,
+                    )
+                }
+            }
+        },
+    ) { contentPadding, scrollModifier, _ ->
+        LazyColumn(modifier = scrollModifier, contentPadding = contentPadding) {
+            items(list, key = { it.id }) { c ->
+                Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
+                    Box(Modifier.size(40.dp).clip(CircleShape)) {
+                        RemoteImage(c.userAvatar, true, Modifier.fillMaxSize())
+                        TapOverlay(Modifier.matchParentSize()) { nav.openUser(c.userId) }
+                    }
+                    Column(Modifier.padding(start = 12.dp).weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(c.userName, fontWeight = FontWeight.Bold, fontSize = 14.sp, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
+                            Text(
+                                c.date.replace('T', ' ').take(16),
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(start = 8.dp),
+                            )
+                        }
+                        if (c.stampUrl != null) {
+                            RemoteImage(c.stampUrl, false, Modifier.padding(top = 6.dp).size(72.dp), crop = false)
+                        } else {
+                            Text(c.text, fontSize = 15.sp, modifier = Modifier.padding(top = 2.dp))
+                        }
+                    }
+                }
+            }
+            item(key = "footer") {
+                val n = next
+                if (n != null && error == null) LaunchedEffect(n) { load(false) }
+                Box(Modifier.fillMaxWidth().padding(20.dp), contentAlignment = Alignment.Center) {
+                    when {
+                        loading -> InfiniteProgressIndicator()
+                        error != null -> Text(error ?: "", color = MiuixTheme.colorScheme.error, textAlign = TextAlign.Center)
+                        loaded && list.isEmpty() -> Text("No comments yet", color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                    }
+                }
+            }
+        }
+    }
+}
+
 // ---------------------------------------------------------------- Account settings
 
 private val AccountFlagLabels = mapOf(
@@ -341,10 +509,8 @@ private val AccountFlagLabels = mapOf(
 @Composable
 fun AccountSettingsScreen() {
     val nav = LocalNavigator.current
-    val appState = LocalAppState.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val scrollBehavior = MiuixScrollBehavior()
     val session = Pixiv.session
 
     var restricted by remember { mutableStateOf<Boolean?>(null) }
@@ -360,24 +526,13 @@ fun AccountSettingsScreen() {
         try { flags = Pixiv.accountState() } catch (e: CancellationException) { throw e } catch (e: Exception) { /* optional info */ }
     }
 
-    Scaffold(
-        topBar = {
-            AdaptiveTopAppBar(
-                title = "Account settings",
-                showTopAppBar = true,
-                scrollBehavior = scrollBehavior,
-                navigationIcon = {
-                    IconButton(onClick = { nav.pop() }) {
-                        Icon(imageVector = MiuixIcons.Back, contentDescription = "Back", tint = MiuixTheme.colorScheme.onSurface)
-                    }
-                },
-            )
-        },
-    ) { inner ->
-        LazyColumn(
-            modifier = Modifier.pageScrollModifiers(appState.enableScrollEndHaptic, true, scrollBehavior),
-            contentPadding = PaddingValues(top = inner.calculateTopPadding(), bottom = inner.calculateBottomPadding()),
-        ) {
+    PageScaffold(
+        title = "Account settings",
+        padding = PaddingValues(0.dp),
+        overlay = true,
+        navigationIcon = { BackButton() },
+    ) { contentPadding, scrollModifier, _ ->
+        LazyColumn(modifier = scrollModifier, contentPadding = contentPadding) {
             if (session != null) {
                 item(key = "account") {
                     SmallTitle("Account")

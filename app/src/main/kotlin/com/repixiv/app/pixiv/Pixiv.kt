@@ -34,7 +34,24 @@ data class Illust(
     val userId: Long,
     val largeUrls: List<String>,
     val originalUrls: List<String>,
+    val totalComments: Int,
+    val isBookmarked: Boolean,
+    val type: String,
 )
+
+data class Comment(
+    val id: Long,
+    val text: String,
+    val date: String,
+    val userId: Long,
+    val userName: String,
+    val userAvatar: String,
+    val stampUrl: String?,
+)
+
+data class CommentPage(val items: List<Comment>, val nextUrl: String?)
+
+data class TrendTag(val tag: String, val translated: String, val imageUrl: String)
 
 data class IllustPage(val items: List<Illust>, val nextUrl: String?)
 
@@ -227,6 +244,66 @@ object Pixiv {
         out
     }
 
+    suspend fun followFeed(nextUrl: String? = null): IllustPage = withContext(Dispatchers.IO) {
+        page(get(nextUrl ?: "$API/v2/illust/follow?restrict=all"))
+    }
+
+    suspend fun ranking(mode: String, nextUrl: String? = null): IllustPage = withContext(Dispatchers.IO) {
+        page(get(nextUrl ?: "$API/v1/illust/ranking?mode=${enc(mode)}&filter=for_android"))
+    }
+
+    suspend fun mangaRecommended(nextUrl: String? = null): IllustPage = withContext(Dispatchers.IO) {
+        page(get(nextUrl ?: "$API/v1/manga/recommended?filter=for_android&include_ranking_label=true"))
+    }
+
+    suspend fun trendingTags(): List<TrendTag> = withContext(Dispatchers.IO) {
+        val arr = get("$API/v1/trending-tags/illust?filter=for_android").optJSONArray("trend_tags")
+        val out = ArrayList<TrendTag>()
+        if (arr != null) for (i in 0 until arr.length()) runCatching {
+            val o = arr.getJSONObject(i)
+            out += TrendTag(
+                tag = o.getString("tag"),
+                translated = o.optString("translated_name").takeIf { it != "null" }.orEmpty(),
+                imageUrl = o.optJSONObject("illust")?.optJSONObject("image_urls")?.optString("square_medium").orEmpty(),
+            )
+        }
+        out
+    }
+
+    suspend fun setBookmark(illustId: Long, add: Boolean) = withContext(Dispatchers.IO) {
+        if (add) {
+            call("POST", "$API/v2/illust/bookmark/add", mapOf("illust_id" to illustId.toString(), "restrict" to "public"))
+        } else {
+            call("POST", "$API/v1/illust/bookmark/delete", mapOf("illust_id" to illustId.toString()))
+        }
+        Unit
+    }
+
+    suspend fun comments(illustId: Long, nextUrl: String? = null): CommentPage = withContext(Dispatchers.IO) {
+        val j = get(nextUrl ?: "$API/v3/illust/comments?illust_id=$illustId")
+        val arr = j.optJSONArray("comments")
+        val out = ArrayList<Comment>()
+        if (arr != null) for (i in 0 until arr.length()) runCatching {
+            val o = arr.getJSONObject(i)
+            val u = o.getJSONObject("user")
+            out += Comment(
+                id = o.getLong("id"),
+                text = o.optString("comment"),
+                date = o.optString("date"),
+                userId = u.optLong("id"),
+                userName = u.optString("name"),
+                userAvatar = u.optJSONObject("profile_image_urls")?.optString("medium").orEmpty(),
+                stampUrl = o.optJSONObject("stamp")?.optString("stamp_url")?.takeIf { it.isNotBlank() },
+            )
+        }
+        CommentPage(out, j.optString("next_url").takeIf { it.isNotBlank() && it != "null" })
+    }
+
+    suspend fun addComment(illustId: Long, text: String) = withContext(Dispatchers.IO) {
+        call("POST", "$API/v1/illust/comment/add", mapOf("illust_id" to illustId.toString(), "comment" to text))
+        Unit
+    }
+
     // ---------- internals ----------
 
     private fun page(j: JSONObject): IllustPage {
@@ -273,6 +350,9 @@ object Pixiv {
             userId = user.optLong("id"),
             largeUrls = large,
             originalUrls = orig,
+            totalComments = o.optInt("total_comments"),
+            isBookmarked = o.optBoolean("is_bookmarked"),
+            type = o.optString("type", "illust"),
         )
     }
 

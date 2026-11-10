@@ -6,6 +6,18 @@
 package com.repixiv.app.pages
 
 import android.content.Intent
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import com.repixiv.app.pixiv.CommentPreviews
+import com.repixiv.app.pixiv.Likes
+import top.yukonga.miuix.kmp.basic.ScrollBehavior
+import top.yukonga.miuix.kmp.icon.extended.FavoritesFill
 import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -14,6 +26,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -98,9 +114,15 @@ internal fun PageScaffold(
     title: String,
     padding: PaddingValues,
     actions: @Composable RowScope.() -> Unit = {},
-    content: @Composable (PaddingValues, Modifier) -> Unit,
+    navigationIcon: @Composable () -> Unit = {},
+    bottomContent: @Composable () -> Unit = {},
+    bottomBar: @Composable () -> Unit = {},
+    overlay: Boolean = false,
+    alwaysShowBar: Boolean = false,
+    content: @Composable (PaddingValues, Modifier, ScrollBehavior) -> Unit,
 ) {
     val appState = LocalAppState.current
+    val showBar = overlay || alwaysShowBar || appState.showTopAppBar
     val backdrop = rememberBlurBackdrop()
     val blurActive = backdrop != null
     val barColor = if (blurActive) Color.Transparent else MiuixTheme.colorScheme.surface
@@ -110,23 +132,23 @@ internal fun PageScaffold(
             BlurredBar(backdrop, blurActive, scrollBehavior) {
                 AdaptiveTopAppBar(
                     title = title,
-                    showTopAppBar = appState.showTopAppBar,
+                    showTopAppBar = showBar,
                     scrollBehavior = scrollBehavior,
                     color = barColor,
+                    navigationIcon = navigationIcon,
+                    bottomContent = bottomContent,
                     actions = actions,
                 )
             }
         },
+        bottomBar = bottomBar,
     ) { inner ->
-        val contentPadding = pageContentPadding(PaddingValues(top = inner.calculateTopPadding()), padding)
+        val contentPadding = pageContentPadding(inner, if (overlay) inner else padding)
         Box(modifier = if (backdrop != null) Modifier.layerBackdrop(backdrop) else Modifier) {
             content(
                 contentPadding,
-                Modifier.pageScrollModifiers(
-                    appState.enableScrollEndHaptic,
-                    appState.showTopAppBar,
-                    scrollBehavior,
-                ),
+                Modifier.pageScrollModifiers(appState.enableScrollEndHaptic, showBar, scrollBehavior),
+                scrollBehavior,
             )
         }
     }
@@ -207,6 +229,98 @@ internal fun fmt(n: Int): String = when {
 }
 
 @Composable
+internal fun TapOverlay(modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Box(
+        modifier.clickable(
+            interactionSource = remember { MutableInteractionSource() },
+            indication = null,
+            onClick = onClick,
+        ),
+    )
+}
+
+@Composable
+internal fun LikeButton(a: Illust, modifier: Modifier = Modifier, idleTint: Color = MiuixTheme.colorScheme.onSurface) {
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val liked = Likes.isLiked(a)
+    val pop = remember { Animatable(1f) }
+    var previous by remember { mutableStateOf(liked) }
+    LaunchedEffect(liked) {
+        if (liked && !previous) {
+            pop.snapTo(0.6f)
+            pop.animateTo(1f, spring(dampingRatio = 0.35f, stiffness = 380f))
+        }
+        previous = liked
+    }
+    IconButton(
+        modifier = modifier,
+        onClick = {
+            scope.launch {
+                try {
+                    Likes.toggle(a)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Toast.makeText(context, e.message ?: "Could not update like", Toast.LENGTH_SHORT).show()
+                }
+            }
+        },
+    ) {
+        Icon(
+            imageVector = if (liked) MiuixIcons.FavoritesFill else MiuixIcons.Favorites,
+            contentDescription = if (liked) "Unlike" else "Like",
+            modifier = Modifier.graphicsLayer {
+                scaleX = pop.value
+                scaleY = pop.value
+            },
+            tint = if (liked) Color(0xFFFF4060) else idleTint,
+        )
+    }
+}
+
+@Composable
+private fun CommentsPreview(a: Illust) {
+    val nav = LocalNavigator.current
+    val summary = MiuixTheme.colorScheme.onSurfaceVariantSummary
+    LaunchedEffect(a.id) { if (a.totalComments > 0) CommentPreviews.load(a.id) }
+    val preview = CommentPreviews.cache[a.id]
+    Card(
+        modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp),
+        onClick = { nav.push(Screen.Comments(a)) },
+    ) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Comments", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                Text(
+                    a.totalComments.toString(),
+                    fontSize = 12.sp,
+                    modifier = Modifier
+                        .padding(start = 8.dp)
+                        .background(MiuixTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(50))
+                        .padding(horizontal = 8.dp, vertical = 1.dp),
+                )
+            }
+            if (preview != null) {
+                Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    RemoteImage(preview.userAvatar, true, Modifier.size(24.dp).clip(CircleShape))
+                    Text(
+                        if (preview.stampUrl != null) "[stamp]" else preview.text,
+                        color = summary,
+                        fontSize = 14.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(start = 8.dp),
+                    )
+                }
+            } else if (a.totalComments == 0) {
+                Text("Be the first to comment", color = summary, fontSize = 14.sp, modifier = Modifier.padding(top = 6.dp))
+            }
+        }
+    }
+}
+
+@Composable
 internal fun IllustCard(a: Illust, onNotInterested: () -> Unit) {
     val nav = LocalNavigator.current
     val context = LocalContext.current
@@ -215,111 +329,189 @@ internal fun IllustCard(a: Illust, onNotInterested: () -> Unit) {
     val tint = MiuixTheme.colorScheme.onSurface
     var showMenu by remember { mutableStateOf(false) }
 
-    Card(
-        modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp),
-        onClick = { nav.push(Screen.Viewer(a)) },
-    ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(40.dp).clip(CircleShape).clickable { nav.openUser(a.userId) }) {
-                    RemoteImage(a.userAvatar, true, Modifier.fillMaxSize())
+    Column(Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.size(36.dp).clip(CircleShape)) {
+                RemoteImage(a.userAvatar, true, Modifier.fillMaxSize())
+                TapOverlay(Modifier.matchParentSize()) { nav.openUser(a.userId) }
+            }
+            Text(
+                a.userName,
+                style = MiuixTheme.textStyles.body1,
+                fontSize = 15.sp,
+                maxLines = 1,
+                modifier = Modifier.padding(start = 10.dp).weight(1f).clickable { nav.openUser(a.userId) },
+            )
+            Box {
+                IconButton(onClick = { showMenu = true }) {
+                    Icon(imageVector = MiuixIcons.More, contentDescription = "More", tint = tint)
                 }
-                Column(modifier = Modifier.padding(start = 12.dp).weight(1f)) {
-                    Text(a.userName, style = MiuixTheme.textStyles.body1, fontSize = 15.sp, maxLines = 1)
-                    Text(a.title, color = summary, fontSize = 13.sp, maxLines = 1)
-                }
-                Box {
-                    IconButton(onClick = { showMenu = true }) {
-                        Icon(imageVector = MiuixIcons.More, contentDescription = "More", tint = tint)
-                    }
-                    val entries = listOf<Pair<DropdownItem, () -> Unit>>(
-                        DropdownItem(
-                            text = "Download",
-                            icon = { m -> Icon(imageVector = MiuixIcons.Download, contentDescription = null, modifier = m, tint = tint) },
-                        ) to {
-                            Toast.makeText(context, "Downloading…", Toast.LENGTH_SHORT).show()
-                            scope.launch { Toast.makeText(context, Downloader.save(context, a), Toast.LENGTH_LONG).show() }
-                            Unit
-                        },
-                        DropdownItem(
-                            text = "View full screen",
-                            icon = { m -> Icon(imageVector = MiuixIcons.Image, contentDescription = null, modifier = m, tint = tint) },
-                        ) to { nav.push(Screen.Viewer(a)) },
-                        DropdownItem(
-                            text = "Not interested",
-                            icon = { m -> Icon(imageVector = MiuixIcons.Hide, contentDescription = null, modifier = m, tint = tint) },
-                        ) to {
-                            onNotInterested()
-                            Toast.makeText(context, "Got it, you'll see less like this", Toast.LENGTH_SHORT).show()
-                        },
-                        DropdownItem(
-                            text = "Share",
-                            icon = { m -> Icon(imageVector = MiuixIcons.Share, contentDescription = null, modifier = m, tint = tint) },
-                        ) to {
-                            val send = Intent(Intent.ACTION_SEND).apply {
-                                type = "text/plain"
-                                putExtra(Intent.EXTRA_TEXT, "${a.title} by ${a.userName}\nhttps://www.pixiv.net/artworks/${a.id}")
-                            }
-                            context.startActivity(Intent.createChooser(send, "Share"))
-                        },
-                    )
-                    OverlayListPopup(
-                        show = showMenu,
-                        alignment = PopupPositionProvider.Align.End,
-                        onDismissRequest = { showMenu = false },
-                    ) {
-                        ListPopupColumn {
-                            entries.forEachIndexed { index, (item, action) ->
-                                DropdownImpl(
-                                    item = item,
-                                    optionSize = entries.size,
-                                    isSelected = false,
-                                    index = index,
-                                    onSelectedIndexChange = {
-                                        showMenu = false
-                                        action()
-                                    },
-                                )
-                            }
+                val entries = listOf<Pair<DropdownItem, () -> Unit>>(
+                    DropdownItem(
+                        text = "Download",
+                        icon = { m -> Icon(imageVector = MiuixIcons.Download, contentDescription = null, modifier = m, tint = tint) },
+                    ) to {
+                        Toast.makeText(context, "Downloading…", Toast.LENGTH_SHORT).show()
+                        scope.launch { Toast.makeText(context, Downloader.save(context, a), Toast.LENGTH_LONG).show() }
+                        Unit
+                    },
+                    DropdownItem(
+                        text = "View full screen",
+                        icon = { m -> Icon(imageVector = MiuixIcons.Image, contentDescription = null, modifier = m, tint = tint) },
+                    ) to { nav.push(Screen.Viewer(a)) },
+                    DropdownItem(
+                        text = "Not interested",
+                        icon = { m -> Icon(imageVector = MiuixIcons.Hide, contentDescription = null, modifier = m, tint = tint) },
+                    ) to {
+                        onNotInterested()
+                        Toast.makeText(context, "Got it, you'll see less like this", Toast.LENGTH_SHORT).show()
+                    },
+                    DropdownItem(
+                        text = "Share",
+                        icon = { m -> Icon(imageVector = MiuixIcons.Share, contentDescription = null, modifier = m, tint = tint) },
+                    ) to {
+                        val send = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_TEXT, "${a.title} by ${a.userName}\nhttps://www.pixiv.net/artworks/${a.id}")
+                        }
+                        context.startActivity(Intent.createChooser(send, "Share"))
+                    },
+                )
+                OverlayListPopup(
+                    show = showMenu,
+                    alignment = PopupPositionProvider.Align.End,
+                    onDismissRequest = { showMenu = false },
+                ) {
+                    ListPopupColumn {
+                        entries.forEachIndexed { index, (item, action) ->
+                            DropdownImpl(
+                                item = item,
+                                optionSize = entries.size,
+                                isSelected = false,
+                                index = index,
+                                onSelectedIndexChange = {
+                                    showMenu = false
+                                    action()
+                                },
+                            )
                         }
                     }
                 }
             }
+        }
+
+        Box(Modifier.fillMaxWidth()) {
             RemoteImage(
                 a.imageUrl,
                 false,
-                Modifier
-                    .padding(top = 12.dp)
-                    .fillMaxWidth()
-                    .aspectRatio((a.width.toFloat() / a.height).coerceIn(0.4f, 3f))
-                    .clip(RoundedCornerShape(12.dp)),
+                Modifier.fillMaxWidth().aspectRatio((a.width.toFloat() / a.height).coerceIn(0.4f, 3f)),
                 crop = false,
             )
-            if (a.tags.isNotEmpty()) {
+            TapOverlay(Modifier.matchParentSize()) { nav.push(Screen.Viewer(a)) }
+            if (a.pageCount > 1) {
                 Text(
-                    a.tags.take(6).joinToString("  ") { "#$it" },
-                    color = MiuixTheme.colorScheme.primary,
-                    fontSize = 13.sp,
-                    maxLines = 2,
-                    modifier = Modifier.padding(top = 10.dp),
+                    "1/${a.pageCount}",
+                    color = Color.White,
+                    fontSize = 12.sp,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(10.dp)
+                        .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(50))
+                        .padding(horizontal = 8.dp, vertical = 2.dp),
                 )
             }
-            Row(
-                modifier = Modifier.padding(top = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(MiuixIcons.Favorites, null, Modifier.size(16.dp), summary)
-                Text(fmt(a.bookmarks), color = summary, fontSize = 13.sp)
-                Icon(MiuixIcons.Show, null, Modifier.padding(start = 8.dp).size(16.dp), summary)
-                Text(fmt(a.views), color = summary, fontSize = 13.sp)
-            }
         }
+
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.Top,
+        ) {
+            Column(Modifier.weight(1f).padding(top = 6.dp)) {
+                Text(a.title, fontWeight = FontWeight.Bold, fontSize = 17.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                if (a.tags.isNotEmpty()) {
+                    Text(
+                        a.tags.take(5).joinToString("  ") { "#$it" },
+                        color = summary,
+                        fontSize = 13.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                }
+                Text(
+                    "${fmt(Likes.count(a))} likes  ·  ${fmt(a.views)} views",
+                    color = summary,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
+            LikeButton(a)
+        }
+        CommentsPreview(a)
+        Box(Modifier.fillMaxWidth().height(0.5.dp).background(MiuixTheme.colorScheme.dividerLine))
     }
 }
 
-internal fun LazyListScope.illustItems(feed: FeedState, emptyText: String) {
-    items(feed.items, key = { it.id }) { IllustCard(it, onNotInterested = { feed.notInterested(it) }) }
+@Composable
+private fun CollectionTile(work: Illust, modifier: Modifier) {
+    val nav = LocalNavigator.current
+    Box(modifier.clip(RoundedCornerShape(12.dp))) {
+        RemoteImage(work.imageUrl, false, Modifier.fillMaxSize(), crop = true)
+        TapOverlay(Modifier.matchParentSize()) { nav.push(Screen.Viewer(work)) }
+    }
+}
+
+/** "Collections by X": a mosaic of the artist's other works (like pixiv's home feed). */
+@Composable
+internal fun CollectionBlock(userId: Long, userName: String) {
+    val nav = LocalNavigator.current
+    var works by remember(userId) { mutableStateOf<List<Illust>>(emptyList()) }
+    LaunchedEffect(userId) {
+        try {
+            works = Pixiv.userIllusts(userId).items.take(5)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+        }
+    }
+    if (works.size < 3) return
+    Column(Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
+        Text(
+            "Collections by $userName",
+            fontSize = 15.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.fillMaxWidth().clickable { nav.openUser(userId) }.padding(horizontal = 12.dp, vertical = 12.dp),
+        )
+        Column(Modifier.padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(Modifier.fillMaxWidth().height(250.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                CollectionTile(works[0], Modifier.weight(2f).fillMaxHeight())
+                Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    CollectionTile(works[1], Modifier.weight(1f).fillMaxWidth())
+                    CollectionTile(works[2], Modifier.weight(1f).fillMaxWidth())
+                }
+            }
+            if (works.size >= 5) {
+                Row(Modifier.fillMaxWidth().height(120.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    CollectionTile(works[3], Modifier.weight(1f).fillMaxHeight())
+                    CollectionTile(works[4], Modifier.weight(1f).fillMaxHeight())
+                }
+            }
+        }
+        Box(Modifier.fillMaxWidth().padding(top = 12.dp).height(0.5.dp).background(MiuixTheme.colorScheme.dividerLine))
+    }
+}
+
+internal fun LazyListScope.illustItems(feed: FeedState, emptyText: String, collections: Boolean = false) {
+    itemsIndexed(feed.items, key = { _, it -> it.id }) { index, a ->
+        Column {
+            IllustCard(a, onNotInterested = { feed.notInterested(a) })
+            if (collections && (index + 1) % 5 == 0) CollectionBlock(a.userId, a.userName)
+        }
+    }
     item(key = "footer") {
         val scope = rememberCoroutineScope()
         val next = feed.nextUrl
@@ -344,38 +536,6 @@ internal fun LazyListScope.illustItems(feed: FeedState, emptyText: String) {
     }
 }
 
-// ---------------------------------------------------------------- Home
-
-@Composable
-fun FeedPage(padding: PaddingValues) {
-    val session = Pixiv.session
-    val scope = rememberCoroutineScope()
-    val feed = remember(session?.userId) { FeedState(applyFilters = true) { Pixiv.recommended(it) } }
-    LaunchedEffect(feed) { if (Pixiv.session != null) feed.refresh() }
-
-    PageScaffold(
-        title = "Home",
-        padding = padding,
-        actions = {
-            if (session != null) {
-                IconButton(onClick = { scope.launch { feed.refresh() } }) {
-                    Icon(MiuixIcons.Refresh, "Refresh", tint = MiuixTheme.colorScheme.onSurface)
-                }
-            }
-        },
-    ) { contentPadding, scrollModifier ->
-        if (session == null) {
-            Box(Modifier.fillMaxSize().padding(contentPadding), contentAlignment = Alignment.Center) {
-                LoginPrompt("Log in to see your pixiv recommendations")
-            }
-        } else {
-            LazyColumn(modifier = scrollModifier, contentPadding = contentPadding) {
-                illustItems(feed, "Nothing to show yet")
-            }
-        }
-    }
-}
-
 // ---------------------------------------------------------------- Search
 
 @Composable
@@ -387,7 +547,7 @@ fun SearchPage(padding: PaddingValues) {
     LaunchedEffect(feed) { if (submitted.isNotBlank() && Pixiv.session != null) feed.refresh() }
     val keyboard = LocalSoftwareKeyboardController.current
 
-    PageScaffold(title = "Search", padding = padding) { contentPadding, scrollModifier ->
+    PageScaffold(title = "Search", padding = padding) { contentPadding, scrollModifier, _ ->
         if (session == null) {
             Box(Modifier.fillMaxSize().padding(contentPadding), contentAlignment = Alignment.Center) {
                 LoginPrompt("Log in to search pixiv")
@@ -444,7 +604,7 @@ fun ProfilePage(padding: PaddingValues) {
                 }
             }
         },
-    ) { contentPadding, scrollModifier ->
+    ) { contentPadding, scrollModifier, _ ->
         if (session == null) {
             Box(Modifier.fillMaxSize().padding(contentPadding), contentAlignment = Alignment.Center) {
                 LoginPrompt("Log in to view your pixiv profile")

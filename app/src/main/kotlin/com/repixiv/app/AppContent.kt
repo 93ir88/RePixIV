@@ -6,7 +6,14 @@
 package com.repixiv.app
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -29,7 +36,6 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.runtime.key
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
@@ -47,6 +53,8 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalLayoutDirection
 import com.repixiv.app.ui.isInDarkTheme
 import com.repixiv.app.pages.AccountSettingsScreen
+import com.repixiv.app.pages.CommentsScreen
+import com.repixiv.app.pages.FeedListScreen
 import com.repixiv.app.pages.UserScreen
 import com.repixiv.app.pages.ViewerScreen
 import com.repixiv.app.pages.FeedPage
@@ -124,20 +132,45 @@ fun AppContent(padding: PaddingValues) {
 
 }
 
+private data class OverlayEntry(val depth: Int, val screen: Screen?)
+
+/** Miuix-style page transitions: new screens spring in from the right, the one below drifts left. */
 @Composable
 private fun OverlayHost(nav: Navigator) {
-    val top = nav.stack.lastOrNull() ?: return
-    key(top) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MiuixTheme.colorScheme.surface)
-                .pointerInput(Unit) { detectTapGestures { } },
-        ) {
-            when (top) {
-                is Screen.Viewer -> ViewerScreen(top.illust, top.page)
-                is Screen.User -> UserScreen(top.userId)
-                Screen.AccountSettings -> AccountSettingsScreen()
+    val entry = OverlayEntry(nav.stack.size, nav.stack.lastOrNull())
+    AnimatedContent(
+        targetState = entry,
+        contentKey = { it.screen },
+        transitionSpec = {
+            val push = targetState.depth > initialState.depth
+            val offsetSpec = spring<IntOffset>(dampingRatio = 1f, stiffness = 380f, visibilityThreshold = IntOffset.VisibilityThreshold)
+            val transition = if (push) {
+                (slideInHorizontally(offsetSpec) { it } + fadeIn(tween(120))) togetherWith
+                    (slideOutHorizontally(offsetSpec) { -it / 4 } + fadeOut(tween(220)))
+            } else {
+                (slideInHorizontally(offsetSpec) { -it / 4 } + fadeIn(tween(220))) togetherWith
+                    (slideOutHorizontally(offsetSpec) { it } + fadeOut(tween(160)))
+            }
+            transition.apply { targetContentZIndex = if (push) 1f else -1f }
+        },
+        modifier = Modifier.fillMaxSize(),
+        label = "overlay",
+    ) { e ->
+        val top = e.screen
+        if (top != null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MiuixTheme.colorScheme.surface)
+                    .pointerInput(Unit) { detectTapGestures { } },
+            ) {
+                when (top) {
+                    is Screen.Viewer -> ViewerScreen(top.illust, top.page)
+                    is Screen.User -> UserScreen(top.userId)
+                    is Screen.Comments -> CommentsScreen(top.illust)
+                    is Screen.FeedList -> FeedListScreen(top.title, top.kind)
+                    Screen.AccountSettings -> AccountSettingsScreen()
+                }
             }
         }
     }
