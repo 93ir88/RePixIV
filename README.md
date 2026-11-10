@@ -1,20 +1,20 @@
 # RePixIV
-Twitter/X-style art feed syncing from Pixiv. Miuix-inspired dark UI.
+Twitter/X-style art feed syncing from Pixiv, built with Jetpack Compose and the **Miuix** UI library.
+
+## Design credits
+The entire UI design (Settings page, bottom NavigationBar, top bars, blur, squircle shapes and
+Monet / Material You color engine) comes from **[Miuix](https://github.com/compose-miuix-ui/miuix)**
+by the compose-miuix-ui contributors, licensed under Apache-2.0 (see `LICENSE-miuix` and `NOTICE`).
+Files derived from the Miuix example app carry the original copyright header.
 
 ## Build
 Push to `main` → Actions tab → download APK artifact.
+Toolchain mirrors Miuix: JDK 21, Gradle 9.9.0, AGP 9.5.1, Kotlin 2.4.21, compileSdk 37, Miuix 0.9.4.
 
 ## Tabs
-Home · Search · Profile · Settings
+Home · Search · Profile · Settings (pager with swipe between tabs, like the Miuix example)
 
 ## Settings
-- Color Mode: System / Light / Dark / MonetSystem / MonetLight / MonetDark
-
-## Build dependency fix
-
-BlurView is resolved from JitPack using the published `com.github.Dimezis:BlurView:version-2.0.6` coordinates. The JitPack Maven repository is configured in `settings.gradle`.
-
-## UI refinements
-- Bottom navigation icon/label spacing tightened to better match the Miuix reference.
-- Color mode popup uses a taller, compact Miuix-like rounded selection panel with a selected checkmark.
-- Monet context wrapping is guarded so unsupported dynamic-color overlays fall back safely instead of crashing startup.
+Show FPS Monitor, Color Mode (System / Light / Dark / MonetSystem / MonetLight / MonetDark),
+Key Color, Palette Style, Color Spec, Squircle, Blur, Scroll End Haptic, Page User Scroll,
+Pager Gesture Mode, Show TopAppBar, Show NavigationBar, Navigation Badge, NavigationBar Mode.

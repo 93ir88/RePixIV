@@ -1,15 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">RePixIV</string>
-    <string name="nav_home">Home</string>
-    <string name="nav_search">Search</string>
-    <string name="nav_profile">Profile</string>
-    <string name="nav_settings">Settings</string>
-    <string name="author_avatar">Author avatar</string>
-    <string name="artwork_image">Artwork image</string>
-    <string name="search_hint">Search artworks, artists, tags…</string>
-    <string name="search_placeholder">Pixiv search — coming soon</string>
-    <string name="profile_placeholder">Connect your Pixiv account — coming soon</string>
-    <string name="pref_color_mode">Color Mode</string>
-    <string name="settings_version">v1.0.0 (1)</string>
 </resources>

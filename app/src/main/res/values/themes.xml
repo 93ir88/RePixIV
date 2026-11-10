@@ -1,41 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.RePixIV" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-        <item name="colorPrimary">@color/primary</item>
-        <item name="colorOnPrimary">@color/white</item>
-        <item name="android:colorBackground">@color/background</item>
-        <item name="colorSurface">@color/surface</item>
-        <item name="colorOnSurface">@color/text_primary</item>
-        <!-- Transparent status/nav bars — edge-to-edge -->
-        <item name="android:statusBarColor">@android:color/transparent</item>
-        <item name="android:navigationBarColor">@android:color/transparent</item>
-        <item name="android:windowLightStatusBar">@bool/is_light_mode</item>
-        <item name="bottomNavigationStyle">@style/MiuixBottomNav</item>
-    </style>
-
-    <!-- miuix NavigationBar exact spec: no pill indicator, 64dp items, 26dp icons, 12sp text -->
-    <style name="MiuixBottomNav" parent="Widget.MaterialComponents.BottomNavigationView">
-        <item name="itemActiveIndicatorStyle">@style/NavNoIndicator</item>
-        <item name="elevation">0dp</item>
-        <item name="itemIconSize">26dp</item>
-        <item name="itemTextAppearanceActive">@style/NavTextActive</item>
-        <item name="itemTextAppearanceInactive">@style/NavTextInactive</item>
-        <item name="itemPaddingTop">3dp</item>
-        <item name="itemPaddingBottom">8dp</item>
-    </style>
-
-    <style name="NavNoIndicator" parent="">
-        <item name="android:color">@android:color/transparent</item>
-        <item name="android:height">0dp</item>
-    </style>
-
-    <!-- miuix: selected = bold, unselected = normal, 12sp -->
-    <style name="NavTextActive">
-        <item name="android:textSize">12sp</item>
-        <item name="android:textStyle">bold</item>
-    </style>
-    <style name="NavTextInactive">
-        <item name="android:textSize">12sp</item>
-        <item name="android:textStyle">normal</item>
-    </style>
+    <style name="Theme.RePixIV" parent="android:Theme.Material.Light.NoActionBar" />
 </resources>
