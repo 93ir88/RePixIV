@@ -143,7 +143,7 @@ private fun OverlayHost(nav: Navigator) {
         contentKey = { it.screen },
         transitionSpec = {
             val push = targetState.depth > initialState.depth
-            val offsetSpec = spring<IntOffset>(dampingRatio = 1f, stiffness = 380f, visibilityThreshold = IntOffset.VisibilityThreshold)
+            val offsetSpec = spring<IntOffset>(dampingRatio = 1f, stiffness = 380f)
             val transition = if (push) {
                 (slideInHorizontally(offsetSpec) { it } + fadeIn(tween(120))) togetherWith
                     (slideOutHorizontally(offsetSpec) { -it / 4 } + fadeOut(tween(220)))
