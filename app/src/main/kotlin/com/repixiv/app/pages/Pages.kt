@@ -21,6 +21,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -62,7 +67,7 @@ private fun PageScaffold(
     val scrollBehavior = MiuixScrollBehavior()
     Scaffold(
         topBar = {
-            BlurredBar(backdrop, blurActive) {
+            BlurredBar(backdrop, blurActive, scrollBehavior) {
                 AdaptiveTopAppBar(
                     title = title,
                     showTopAppBar = appState.showTopAppBar,
@@ -161,9 +166,7 @@ private fun fmt(n: Int): String = when {
 
 @Composable
 fun SearchPage(padding: PaddingValues) {
-    var query by androidx.compose.runtime.remember {
-        androidx.compose.runtime.mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(""))
-    }
+    var query by remember { mutableStateOf(TextFieldValue("")) }
     PageScaffold("Search", padding) { contentPadding, _ ->
         Column(modifier = Modifier.fillMaxSize().padding(contentPadding).padding(12.dp)) {
             TextField(

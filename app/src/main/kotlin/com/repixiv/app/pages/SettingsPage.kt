@@ -57,6 +57,7 @@ private val ColorModeOptions = listOf("System", "Light", "Dark", "MonetSystem", 
 private val PaletteStyleOptions = ThemePaletteStyle.entries.map { it.name }
 private val ColorSpecOptions = ThemeColorSpec.entries.map { it.name }
 private val KeyColorOptions = listOf("Default") + KeyColors.map { it.first }
+private val BlurStyleOptions = listOf("Gaussian", "Progressive")
 private val PagerGestureModeOptions = listOf("Default", "Cross-Axis", "iOS-like")
 
 private const val MIUIX_URL = "https://github.com/compose-miuix-ui/miuix"
@@ -79,7 +80,7 @@ fun SettingsPage(padding: PaddingValues) {
 
     Scaffold(
         topBar = {
-            BlurredBar(backdrop, blurActive) {
+            BlurredBar(backdrop, blurActive, topAppBarScrollBehavior) {
                 AdaptiveTopAppBar(
                     title = "Settings",
                     showTopAppBar = appState.showTopAppBar,
@@ -154,24 +155,10 @@ private fun SettingsContent(
                                 selectedIndex = appState.paletteStyle,
                                 onSelectedIndexChange = { updateAppState { state -> state.copy(paletteStyle = it) } },
                             )
-                            val currentStyle = ThemePaletteStyle.entries.getOrNull(appState.paletteStyle) ?: ThemePaletteStyle.TonalSpot
-                            val isCmf = currentStyle == ThemePaletteStyle.Cmf
-                            val isSpec2025Supported = currentStyle in listOf(
-                                ThemePaletteStyle.TonalSpot,
-                                ThemePaletteStyle.Neutral,
-                                ThemePaletteStyle.Vibrant,
-                                ThemePaletteStyle.Expressive,
-                            )
-                            val (colorSpecItems, colorSpecIndex, colorSpecEnabled) = when {
-                                isCmf -> Triple(listOf("Spec2026"), 0, false)
-                                !isSpec2025Supported -> Triple(listOf("Spec2021"), 0, false)
-                                else -> Triple(ColorSpecOptions, appState.colorSpec, true)
-                            }
                             OverlayDropdownPreference(
                                 title = "Color Spec",
-                                enabled = colorSpecEnabled,
-                                items = colorSpecItems,
-                                selectedIndex = colorSpecIndex,
+                                items = ColorSpecOptions,
+                                selectedIndex = appState.colorSpec,
                                 onSelectedIndexChange = { updateAppState { state -> state.copy(colorSpec = it) } },
                             )
                         }
@@ -213,6 +200,14 @@ private fun SettingsContent(
                         checked = appState.showTopAppBar,
                         onCheckedChange = { updateAppState { state -> state.copy(showTopAppBar = it) } },
                     )
+                    AnimatedVisibility(visible = appState.showTopAppBar && appState.enableBlur && isRuntimeShaderSupported()) {
+                        OverlayDropdownPreference(
+                            title = "TopAppBar Blur Style",
+                            items = BlurStyleOptions,
+                            selectedIndex = appState.blurStyle,
+                            onSelectedIndexChange = { updateAppState { state -> state.copy(blurStyle = it) } },
+                        )
+                    }
                     SwitchPreference(
                         title = "Show NavigationBar",
                         checked = appState.showNavigationBar,

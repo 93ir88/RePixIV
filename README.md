@@ -9,7 +9,7 @@ Files derived from the Miuix example app carry the original copyright header.
 
 ## Build
 Push to `main` → Actions tab → download APK artifact.
-Toolchain mirrors Miuix: JDK 21, Gradle 9.9.0, AGP 9.5.1, Kotlin 2.4.21, compileSdk 37, Miuix 0.9.4.
+Toolchain mirrors Miuix: JDK 21, Gradle 9.9.0, AGP 9.5.1, Kotlin 2.4.21, compileSdk 37, Miuix 0.9.4 (sources ported from tag v0.9.4).
 
 ## Tabs
 Home · Search · Profile · Settings (pager with swipe between tabs, like the Miuix example)

@@ -13,13 +13,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import top.yukonga.miuix.kmp.theme.ColorSchemeMode
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.theme.TextStyles
 import top.yukonga.miuix.kmp.theme.ThemeColorSpec
 import top.yukonga.miuix.kmp.theme.ThemeController
 import top.yukonga.miuix.kmp.theme.ThemePaletteStyle
 
 val LocalColorMode = compositionLocalOf { 0 }
-val LocalIsDarkTheme = compositionLocalOf<Boolean?> { null }
 
 @Composable
 fun AppTheme(
@@ -27,31 +25,25 @@ fun AppTheme(
     keyColor: Color? = null,
     paletteStyle: Int = 0,
     colorSpec: Int = 0,
-    isDark: Boolean? = null,
-    textStyles: TextStyles = MiuixTheme.textStyles,
     content: @Composable () -> Unit,
 ) {
     val spec = ThemeColorSpec.entries.getOrNull(colorSpec) ?: ThemeColorSpec.Spec2021
-    val style = ThemePaletteStyle.entries.getOrNull(paletteStyle) ?: ThemePaletteStyle.TonalSpot
-    val parentIsDark = LocalIsDarkTheme.current
-    val resolvedIsDark = isDark ?: parentIsDark
-    val controller = remember(colorMode, keyColor, spec, style, resolvedIsDark) {
+    val style = ThemePaletteStyle.entries.getOrNull(paletteStyle) ?: ThemePaletteStyle.Content
+    val controller = remember(colorMode, keyColor, spec, style) {
         when (colorMode) {
             1 -> ThemeController(ColorSchemeMode.Light)
             2 -> ThemeController(ColorSchemeMode.Dark)
-            3 -> ThemeController(ColorSchemeMode.MonetSystem, keyColor = keyColor, colorSpec = spec, paletteStyle = style, isDark = resolvedIsDark)
+            3 -> ThemeController(ColorSchemeMode.MonetSystem, keyColor = keyColor, colorSpec = spec, paletteStyle = style)
             4 -> ThemeController(ColorSchemeMode.MonetLight, keyColor = keyColor, colorSpec = spec, paletteStyle = style)
             5 -> ThemeController(ColorSchemeMode.MonetDark, keyColor = keyColor, colorSpec = spec, paletteStyle = style)
-            else -> ThemeController(ColorSchemeMode.System, isDark = resolvedIsDark)
+            else -> ThemeController(ColorSchemeMode.System)
         }
     }
     CompositionLocalProvider(
         LocalColorMode provides colorMode,
-        LocalIsDarkTheme provides resolvedIsDark,
     ) {
         MiuixTheme(
             controller = controller,
-            textStyles = textStyles,
             content = content,
         )
     }
@@ -61,7 +53,7 @@ fun AppTheme(
 fun isInDarkTheme(): Boolean = when (LocalColorMode.current) {
     1, 4 -> false
     2, 5, 6 -> true
-    else -> LocalIsDarkTheme.current ?: isSystemInDarkTheme()
+    else -> isSystemInDarkTheme()
 }
 
 val KeyColors: List<Pair<String, Color>> = listOf(

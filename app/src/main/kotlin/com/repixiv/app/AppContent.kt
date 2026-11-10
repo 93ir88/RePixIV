@@ -17,6 +17,8 @@ import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
@@ -232,14 +234,13 @@ fun AppPager(
         state = pagerState,
         modifier = modifier.pagerGestureOverride(
             pagerState = pagerState,
-            flingBehavior = flingBehavior,
             mode = appState.pagerInterceptionMode,
             enabled = appState.enablePageUserScroll,
         ),
         userScrollEnabled = appState.enablePageUserScroll &&
-            appState.pagerInterceptionMode != PagerInterceptionMode.CrossAxis.ordinal,
+            appState.pagerInterceptionMode != PagerInterceptionMode.CrossAxisInterceptor.ordinal,
         pageNestedScrollConnection = if (
-            appState.pagerInterceptionMode == PagerInterceptionMode.CrossAxis.ordinal
+            appState.pagerInterceptionMode == PagerInterceptionMode.CrossAxisInterceptor.ordinal
         ) {
             PagerGestureNestedScrollConnection
         } else {

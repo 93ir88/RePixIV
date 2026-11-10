@@ -22,6 +22,7 @@ data class AppState(
     val pagerInterceptionMode: Int = 1,
     val enableSquircle: Boolean = true,
     val enableBlur: Boolean = true,
+    val blurStyle: Int = 0,
 )
 
 val LocalAppState = compositionLocalOf<AppState> { error("No AppState provided!") }
@@ -48,6 +49,7 @@ object AppStateStore {
             pagerInterceptionMode = p.getInt("pagerInterceptionMode", d.pagerInterceptionMode),
             enableSquircle = p.getBoolean("enableSquircle", d.enableSquircle),
             enableBlur = p.getBoolean("enableBlur", d.enableBlur),
+            blurStyle = p.getInt("blurStyle", d.blurStyle),
         )
     }
 
@@ -67,6 +69,7 @@ object AppStateStore {
             .putInt("pagerInterceptionMode", s.pagerInterceptionMode)
             .putBoolean("enableSquircle", s.enableSquircle)
             .putBoolean("enableBlur", s.enableBlur)
+            .putInt("blurStyle", s.blurStyle)
             .apply()
     }
 }
