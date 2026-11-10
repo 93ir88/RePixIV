@@ -2,3 +2,8 @@ RePixIV
 This product includes software from Miuix (https://github.com/compose-miuix-ui/miuix)
 Copyright 2025, compose-miuix-ui contributors, licensed under the Apache License 2.0.
 UI design, theme/Monet handling, settings page, navigation bar and utilities are derived from Miuix.
+
+The floating bottom bar (app/src/main/kotlin/com/repixiv/app/ui/bakasu/) is derived from BakaSU
+(https://github.com/Baka-SU/BakaSU), licensed under the GNU General Public License v3.0 (see LICENSE-bakasu).
+BakaSU adapted it from the Miuix example app (Apache-2.0) which is based on Kyant0/AndroidLiquidGlass
+(https://github.com/Kyant0/AndroidLiquidGlass, Apache-2.0).

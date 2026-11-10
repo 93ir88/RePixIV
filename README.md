@@ -7,6 +7,12 @@ Monet / Material You color engine) comes from **[Miuix](https://github.com/compo
 by the compose-miuix-ui contributors, licensed under Apache-2.0 (see `LICENSE-miuix` and `NOTICE`).
 Files derived from the Miuix example app carry the original copyright header.
 
+The **floating navigation bar** (Settings → Use FloatingNavigationBar) is the liquid-glass bar from
+**[BakaSU](https://github.com/Baka-SU/BakaSU)** (GPL-3.0, see `LICENSE-bakasu`), which adapted it from the Miuix
+example app and Kyant0's [AndroidLiquidGlass](https://github.com/Kyant0/AndroidLiquidGlass) (both Apache-2.0).
+Because it is GPL-3.0 code, distributing RePixIV with it means following the GPL-3.0 terms
+(for example, offering the source of your build).
+
 ## Build
 Push to `main` → Actions tab → download APK artifact.
 Toolchain mirrors Miuix: JDK 21, Gradle 9.9.0, AGP 9.5.1, Kotlin 2.4.21, compileSdk 37, Miuix 0.9.4 (sources ported from tag v0.9.4).

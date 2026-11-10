@@ -62,6 +62,7 @@ private val BlurStyleOptions = listOf("Gaussian", "Progressive")
 private val PagerGestureModeOptions = listOf("Default", "Cross-Axis", "iOS-like")
 
 private const val MIUIX_URL = "https://github.com/compose-miuix-ui/miuix"
+private const val BAKASU_URL = "https://github.com/Baka-SU/BakaSU"
 
 @Composable
 fun SettingsPage(padding: PaddingValues) {
@@ -228,6 +229,7 @@ private fun SettingsContent(
                         Column {
                             SwitchPreference(
                                 title = "Use FloatingNavigationBar",
+                                summary = "Liquid-glass floating bar from BakaSU",
                                 checked = appState.useFloatingNavigationBar,
                                 onCheckedChange = { updateAppState { state -> state.copy(useFloatingNavigationBar = it) } },
                             )
@@ -252,6 +254,11 @@ private fun SettingsContent(
                         title = "UI design credits",
                         summary = "Design & components by Miuix (compose-miuix-ui), Apache-2.0",
                         onClick = { uriHandler.openUri(MIUIX_URL) },
+                    )
+                    ArrowPreference(
+                        title = "Floating bar credits",
+                        summary = "Liquid-glass bar by BakaSU (GPL-3.0), based on Miuix and Kyant0's AndroidLiquidGlass",
+                        onClick = { uriHandler.openUri(BAKASU_URL) },
                     )
                 }
             }

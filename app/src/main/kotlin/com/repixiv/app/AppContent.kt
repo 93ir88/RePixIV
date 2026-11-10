@@ -24,6 +24,18 @@ import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
@@ -51,7 +63,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalLayoutDirection
-import com.repixiv.app.ui.isInDarkTheme
+import com.repixiv.app.ui.bakasu.FloatingBottomBar
+import com.repixiv.app.ui.bakasu.FloatingBottomBarItem
 import com.repixiv.app.pages.AccountSettingsScreen
 import com.repixiv.app.pages.CommentsScreen
 import com.repixiv.app.pages.FeedListScreen
@@ -66,9 +79,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Badge
-import top.yukonga.miuix.kmp.basic.FloatingNavigationBar
-import top.yukonga.miuix.kmp.basic.FloatingNavigationBarItem
-import top.yukonga.miuix.kmp.basic.FloatingToolbarDefaults
+import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.theme.LocalContentColor
 import top.yukonga.miuix.kmp.basic.NavigationBar
 import top.yukonga.miuix.kmp.basic.NavigationBarDisplayMode
 import top.yukonga.miuix.kmp.basic.NavigationBarItem
@@ -78,7 +90,6 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.blur.BlendColorEntry
 import top.yukonga.miuix.kmp.blur.BlurDefaults
 import top.yukonga.miuix.kmp.blur.LayerBackdrop
-import top.yukonga.miuix.kmp.blur.highlight.Highlight
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
 import top.yukonga.miuix.kmp.blur.textureBlur
@@ -281,41 +292,49 @@ private fun AppNavigationBar(
             }
         }
         if (appState.useFloatingNavigationBar) {
-            val floatingBarColor = if (blurActive) Color.Transparent else MiuixTheme.colorScheme.surfaceContainer
-            val floatingBarShape = RoundedCornerShape(FloatingToolbarDefaults.CornerRadius)
-            val isDark = isInDarkTheme()
-            val floatingHighlight = remember(isDark) {
-                if (isDark) Highlight.GlassStrokeMiddleDark else Highlight.GlassStrokeMiddleLight
-            }
-            Box(modifier = modifier) {
-                FloatingNavigationBar(
-                    modifier = if (blurActive) {
-                        Modifier.textureBlur(
-                            backdrop = backdrop,
-                            shape = floatingBarShape,
-                            blurRadius = 25f,
-                            colors = BlurDefaults.blurColors(
-                                blendColors = listOf(
-                                    BlendColorEntry(color = MiuixTheme.colorScheme.surfaceContainer.copy(0.6f)),
-                                ),
-                            ),
-                            highlight = floatingHighlight,
-                        )
-                    } else {
-                        Modifier
-                    },
-                    color = floatingBarColor,
-                    horizontalAlignment = FloatingNavigationBarAlignment.fromInt(appState.floatingNavigationBarPosition)
-                        .toAlignment(),
-                ) {
+            // Floating liquid-glass bar from BakaSU (https://github.com/Baka-SU/BakaSU).
+            val position = FloatingNavigationBarAlignment.fromInt(appState.floatingNavigationBarPosition)
+            Box(
+                modifier = modifier
+                    .fillMaxWidth()
+                    .windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Horizontal))
+                    .padding(horizontal = 12.dp)
+                    .padding(bottom = 12.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()),
+                contentAlignment = when (position) {
+                    FloatingNavigationBarAlignment.Center -> Alignment.Center
+                    FloatingNavigationBarAlignment.Start -> Alignment.CenterStart
+                    FloatingNavigationBarAlignment.End -> Alignment.CenterEnd
+                },
+            ) {
+                FloatingBottomBar(
+                    selectedIndex = page,
+                    onSelected = { mainPagerState.animateToPage(it) },
+                    tabsCount = navigationItems.size,
+                    blurBackdrop = if (appState.enableBlur) backdrop else null,
+                ) { activateTab ->
                     navigationItems.forEachIndexed { index, item ->
-                        FloatingNavigationBarItem(
+                        FloatingBottomBarItem(
                             selected = page == index,
-                            onClick = { mainPagerState.animateToPage(index) },
-                            icon = item.icon,
-                            label = item.label,
-                            badge = navigationItemBadge(index, appState.showNavigationBarBadge),
-                        )
+                            onClick = { activateTab(index) },
+                            modifier = Modifier.defaultMinSize(minWidth = 76.dp),
+                        ) {
+                            val contentColor = LocalContentColor.current
+                            Box {
+                                Icon(imageVector = item.icon, contentDescription = item.label, tint = contentColor)
+                                navigationItemBadge(index, appState.showNavigationBarBadge)?.let { badge ->
+                                    Box(Modifier.align(Alignment.TopEnd).offset(x = 8.dp, y = (-4).dp)) { badge() }
+                                }
+                            }
+                            Text(
+                                text = item.label,
+                                color = contentColor,
+                                fontSize = 11.sp,
+                                lineHeight = 14.sp,
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Visible,
+                            )
+                        }
                     }
                 }
             }
