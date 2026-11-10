@@ -57,6 +57,7 @@ private val ColorModeOptions = listOf("System", "Light", "Dark", "MonetSystem", 
 private val PaletteStyleOptions = ThemePaletteStyle.entries.map { it.name }
 private val ColorSpecOptions = ThemeColorSpec.entries.map { it.name }
 private val KeyColorOptions = listOf("Default") + KeyColors.map { it.first }
+private val FloatingNavigationBarPositionOptions = listOf("Center", "Start", "End")
 private val BlurStyleOptions = listOf("Gaussian", "Progressive")
 private val PagerGestureModeOptions = listOf("Default", "Cross-Axis", "iOS-like")
 
@@ -128,11 +129,6 @@ private fun SettingsContent(
                 Card(
                     modifier = Modifier.padding(12.dp),
                 ) {
-                    SwitchPreference(
-                        title = "Show FPS Monitor",
-                        checked = appState.showFPSMonitor,
-                        onCheckedChange = { updateAppState { state -> state.copy(showFPSMonitor = it) } },
-                    )
                     OverlayDropdownPreference(
                         title = "Color Mode",
                         items = ColorModeOptions,
@@ -220,13 +216,30 @@ private fun SettingsContent(
                             onCheckedChange = { updateAppState { state -> state.copy(showNavigationBarBadge = it) } },
                         )
                     }
-                    AnimatedVisibility(visible = appState.showNavigationBar) {
+                    AnimatedVisibility(visible = appState.showNavigationBar && !appState.useFloatingNavigationBar) {
                         OverlayDropdownPreference(
                             title = "NavigationBar Mode",
                             items = NavigationBarDisplayModeOptions,
                             selectedIndex = appState.navigationBarMode,
                             onSelectedIndexChange = { updateAppState { state -> state.copy(navigationBarMode = it) } },
                         )
+                    }
+                    AnimatedVisibility(visible = appState.showNavigationBar) {
+                        Column {
+                            SwitchPreference(
+                                title = "Use FloatingNavigationBar",
+                                checked = appState.useFloatingNavigationBar,
+                                onCheckedChange = { updateAppState { state -> state.copy(useFloatingNavigationBar = it) } },
+                            )
+                            AnimatedVisibility(visible = appState.useFloatingNavigationBar) {
+                                OverlayDropdownPreference(
+                                    title = "FloatingNavigationBar Position",
+                                    items = FloatingNavigationBarPositionOptions,
+                                    selectedIndex = appState.floatingNavigationBarPosition,
+                                    onSelectedIndexChange = { updateAppState { state -> state.copy(floatingNavigationBarPosition = it) } },
+                                )
+                            }
+                        }
                     }
                 }
             }

@@ -21,6 +21,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.unit.dp
+import com.repixiv.app.pixiv.Pixiv
 import com.repixiv.app.ui.AppTheme
 import com.repixiv.app.ui.keyColorFor
 import top.yukonga.miuix.kmp.squircle.LocalSquircleEnabled
@@ -28,6 +29,7 @@ import top.yukonga.miuix.kmp.squircle.LocalSquircleEnabled
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Pixiv.init(applicationContext)
 
         setContent {
             var appState by remember { mutableStateOf(AppStateStore.load(this@MainActivity)) }

@@ -22,7 +22,6 @@ import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerDefaults
 import androidx.compose.foundation.pager.PagerState
@@ -39,18 +38,22 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalLayoutDirection
+import com.repixiv.app.ui.isInDarkTheme
 import com.repixiv.app.pages.FeedPage
 import com.repixiv.app.pages.ProfilePage
 import com.repixiv.app.pages.SearchPage
 import com.repixiv.app.pages.SettingsPage
-import com.repixiv.app.util.FPSMonitor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Badge
+import top.yukonga.miuix.kmp.basic.FloatingNavigationBar
+import top.yukonga.miuix.kmp.basic.FloatingNavigationBarItem
+import top.yukonga.miuix.kmp.basic.FloatingToolbarDefaults
 import top.yukonga.miuix.kmp.basic.NavigationBar
 import top.yukonga.miuix.kmp.basic.NavigationBarDisplayMode
 import top.yukonga.miuix.kmp.basic.NavigationBarItem
@@ -60,6 +63,7 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.blur.BlendColorEntry
 import top.yukonga.miuix.kmp.blur.BlurDefaults
 import top.yukonga.miuix.kmp.blur.LayerBackdrop
+import top.yukonga.miuix.kmp.blur.highlight.Highlight
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
 import top.yukonga.miuix.kmp.blur.textureBlur
@@ -82,7 +86,6 @@ object UIConstants {
 
 @Composable
 fun AppContent(padding: PaddingValues) {
-    val appState = LocalAppState.current
     val pagerState = rememberPagerState(pageCount = { UIConstants.PAGE_COUNT })
     val scope = rememberCoroutineScope()
     val mainPagerState = remember(pagerState) { MainPagerState(pagerState, scope) }
@@ -105,9 +108,6 @@ fun AppContent(padding: PaddingValues) {
         mainPagerState = mainPagerState,
     )
 
-    AnimatedVisibility(visible = appState.showFPSMonitor, enter = fadeIn(), exit = fadeOut()) {
-        FPSMonitor(modifier = Modifier.fillMaxSize().statusBarsPadding())
-    }
 }
 
 @Composable
@@ -166,49 +166,112 @@ private fun AppNavigationBar(
         enter = fadeIn() + expandVertically(),
         exit = fadeOut() + shrinkVertically(),
     ) {
-        Box(
-            modifier = Modifier
-                .then(
-                    if (blurActive) {
+        AnimatedVisibility(
+            visible = !appState.useFloatingNavigationBar,
+            enter = fadeIn() + expandVertically(expandFrom = Alignment.Top),
+            exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Top),
+        ) {
+            Box(
+                modifier = Modifier
+                    .then(
+                        if (blurActive) {
+                            Modifier.textureBlur(
+                                backdrop = backdrop,
+                                shape = RectangleShape,
+                                blurRadius = 25f,
+                                colors = BlurDefaults.blurColors(
+                                    blendColors = listOf(
+                                        BlendColorEntry(color = MiuixTheme.colorScheme.surface.copy(0.8f)),
+                                    ),
+                                ),
+                            )
+                        } else {
+                            Modifier
+                        },
+                    )
+                    .background(barColor)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = {},
+                    )
+                    .then(modifier),
+            ) {
+                NavigationBar(
+                    modifier = Modifier,
+                    color = barColor,
+                    mode = NavigationBarDisplayMode.entries[appState.navigationBarMode],
+                ) {
+                    navigationItems.forEachIndexed { index, item ->
+                        NavigationBarItem(
+                            selected = page == index,
+                            onClick = { mainPagerState.animateToPage(index) },
+                            icon = item.icon,
+                            label = item.label,
+                            badge = navigationItemBadge(index, appState.showNavigationBarBadge),
+                        )
+                    }
+                }
+            }
+        }
+        if (appState.useFloatingNavigationBar) {
+            val floatingBarColor = if (blurActive) Color.Transparent else MiuixTheme.colorScheme.surfaceContainer
+            val floatingBarShape = RoundedCornerShape(FloatingToolbarDefaults.CornerRadius)
+            val isDark = isInDarkTheme()
+            val floatingHighlight = remember(isDark) {
+                if (isDark) Highlight.GlassStrokeMiddleDark else Highlight.GlassStrokeMiddleLight
+            }
+            Box(modifier = modifier) {
+                FloatingNavigationBar(
+                    modifier = if (blurActive) {
                         Modifier.textureBlur(
                             backdrop = backdrop,
-                            shape = RectangleShape,
+                            shape = floatingBarShape,
                             blurRadius = 25f,
                             colors = BlurDefaults.blurColors(
                                 blendColors = listOf(
-                                    BlendColorEntry(color = MiuixTheme.colorScheme.surface.copy(0.8f)),
+                                    BlendColorEntry(color = MiuixTheme.colorScheme.surfaceContainer.copy(0.6f)),
                                 ),
                             ),
+                            highlight = floatingHighlight,
                         )
                     } else {
                         Modifier
                     },
-                )
-                .background(barColor)
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = {},
-                )
-                .then(modifier),
-        ) {
-            NavigationBar(
-                modifier = Modifier,
-                color = barColor,
-                mode = NavigationBarDisplayMode.entries[appState.navigationBarMode],
-            ) {
-                navigationItems.forEachIndexed { index, item ->
-                    NavigationBarItem(
-                        selected = page == index,
-                        onClick = { mainPagerState.animateToPage(index) },
-                        icon = item.icon,
-                        label = item.label,
-                        badge = navigationItemBadge(index, appState.showNavigationBarBadge),
-                    )
+                    color = floatingBarColor,
+                    horizontalAlignment = FloatingNavigationBarAlignment.fromInt(appState.floatingNavigationBarPosition)
+                        .toAlignment(),
+                ) {
+                    navigationItems.forEachIndexed { index, item ->
+                        FloatingNavigationBarItem(
+                            selected = page == index,
+                            onClick = { mainPagerState.animateToPage(index) },
+                            icon = item.icon,
+                            label = item.label,
+                            badge = navigationItemBadge(index, appState.showNavigationBarBadge),
+                        )
+                    }
                 }
             }
         }
     }
+}
+
+enum class FloatingNavigationBarAlignment(val value: Int) {
+    Center(0),
+    Start(1),
+    End(2),
+    ;
+
+    companion object {
+        fun fromInt(value: Int) = entries.find { it.value == value } ?: Center
+    }
+}
+
+private fun FloatingNavigationBarAlignment.toAlignment(): Alignment.Horizontal = when (this) {
+    FloatingNavigationBarAlignment.Center -> Alignment.CenterHorizontally
+    FloatingNavigationBarAlignment.Start -> Alignment.Start
+    FloatingNavigationBarAlignment.End -> Alignment.End
 }
 
 private fun navigationItemBadge(index: Int, show: Boolean): (@Composable () -> Unit)? = when {
@@ -246,6 +309,7 @@ fun AppPager(
         } else {
             nativeConnection
         },
+        beyondViewportPageCount = UIConstants.PAGE_COUNT,
         verticalAlignment = Alignment.Top,
         flingBehavior = flingBehavior,
         pageContent = { page ->

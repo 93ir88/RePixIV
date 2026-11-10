@@ -11,10 +11,18 @@ Files derived from the Miuix example app carry the original copyright header.
 Push to `main` → Actions tab → download APK artifact.
 Toolchain mirrors Miuix: JDK 21, Gradle 9.9.0, AGP 9.5.1, Kotlin 2.4.21, compileSdk 37, Miuix 0.9.4 (sources ported from tag v0.9.4).
 
-## Tabs
-Home · Search · Profile · Settings (pager with swipe between tabs, like the Miuix example)
+## Features
+- **Log in with pixiv** (OAuth + PKCE through the official web login page), or paste a refresh token.
+- **Home**: your personalized pixiv recommendations (infinite scroll). **Search**: tag/keyword search.
+  **Profile**: your account stats and public bookmarks. Tap an artwork to open it on pixiv.net.
+- Tabs swipe like the Miuix example app.
 
 ## Settings
-Show FPS Monitor, Color Mode (System / Light / Dark / MonetSystem / MonetLight / MonetDark),
-Key Color, Palette Style, Color Spec, Squircle, Blur, Scroll End Haptic, Page User Scroll,
-Pager Gesture Mode, Show TopAppBar, Show NavigationBar, Navigation Badge, NavigationBar Mode.
+Color Mode (System / Light / Dark / MonetSystem / MonetLight / MonetDark), Key Color, Palette Style,
+Color Spec, Squircle, Blur, Scroll End Haptic, Page User Scroll, Pager Gesture Mode, Show TopAppBar,
+TopAppBar Blur Style, Show NavigationBar, Navigation Badge, NavigationBar Mode and
+**Use FloatingNavigationBar** (+ position Center / Start / End).
+
+## Notes
+This uses pixiv's unofficial mobile app API, which can change without notice. Tokens are stored in
+app-private SharedPreferences.

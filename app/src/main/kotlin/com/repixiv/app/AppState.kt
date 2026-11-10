@@ -12,11 +12,12 @@ data class AppState(
     val seedIndex: Int = 0,
     val paletteStyle: Int = 0,
     val colorSpec: Int = 0,
-    val showFPSMonitor: Boolean = false,
     val showTopAppBar: Boolean = true,
     val showNavigationBar: Boolean = true,
     val showNavigationBarBadge: Boolean = false,
     val navigationBarMode: Int = 0,
+    val useFloatingNavigationBar: Boolean = false,
+    val floatingNavigationBarPosition: Int = 0,
     val enablePageUserScroll: Boolean = true,
     val enableScrollEndHaptic: Boolean = true,
     val pagerInterceptionMode: Int = 1,
@@ -39,11 +40,12 @@ object AppStateStore {
             seedIndex = p.getInt("seedIndex", d.seedIndex),
             paletteStyle = p.getInt("paletteStyle", d.paletteStyle),
             colorSpec = p.getInt("colorSpec", d.colorSpec),
-            showFPSMonitor = p.getBoolean("showFPSMonitor", d.showFPSMonitor),
             showTopAppBar = p.getBoolean("showTopAppBar", d.showTopAppBar),
             showNavigationBar = p.getBoolean("showNavigationBar", d.showNavigationBar),
             showNavigationBarBadge = p.getBoolean("showNavigationBarBadge", d.showNavigationBarBadge),
             navigationBarMode = p.getInt("navigationBarMode", d.navigationBarMode),
+            useFloatingNavigationBar = p.getBoolean("useFloatingNavigationBar", d.useFloatingNavigationBar),
+            floatingNavigationBarPosition = p.getInt("floatingNavigationBarPosition", d.floatingNavigationBarPosition),
             enablePageUserScroll = p.getBoolean("enablePageUserScroll", d.enablePageUserScroll),
             enableScrollEndHaptic = p.getBoolean("enableScrollEndHaptic", d.enableScrollEndHaptic),
             pagerInterceptionMode = p.getInt("pagerInterceptionMode", d.pagerInterceptionMode),
@@ -59,11 +61,12 @@ object AppStateStore {
             .putInt("seedIndex", s.seedIndex)
             .putInt("paletteStyle", s.paletteStyle)
             .putInt("colorSpec", s.colorSpec)
-            .putBoolean("showFPSMonitor", s.showFPSMonitor)
             .putBoolean("showTopAppBar", s.showTopAppBar)
             .putBoolean("showNavigationBar", s.showNavigationBar)
             .putBoolean("showNavigationBarBadge", s.showNavigationBarBadge)
             .putInt("navigationBarMode", s.navigationBarMode)
+            .putBoolean("useFloatingNavigationBar", s.useFloatingNavigationBar)
+            .putInt("floatingNavigationBarPosition", s.floatingNavigationBarPosition)
             .putBoolean("enablePageUserScroll", s.enablePageUserScroll)
             .putBoolean("enableScrollEndHaptic", s.enableScrollEndHaptic)
             .putInt("pagerInterceptionMode", s.pagerInterceptionMode)
