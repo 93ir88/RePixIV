@@ -179,7 +179,7 @@ fun FeedPage(padding: PaddingValues) {
                                     SectionHeader("Daily ranking") { nav.push(Screen.FeedList("Daily ranking", "ranking:day")) }
                                 }
                                 item(key = "rankingRow") { WorkRow(illustRanking, "Ranking is unavailable") }
-                                item(key = "followingHeader") { SectionHeader("Following", null) }
+                                item(key = "followingHeader") { SectionHeader("Following", onShowAll = null) }
                                 illustItems(latest, "No new works from people you follow")
                             }
                             2 -> {
@@ -189,25 +189,25 @@ fun FeedPage(padding: PaddingValues) {
                                     }
                                 }
                                 item(key = "mangaRankingRow") { WorkRow(mangaRanking, "Ranking is unavailable") }
-                                item(key = "mangaHeader") { SectionHeader("Recommended manga", null) }
+                                item(key = "mangaHeader") { SectionHeader("Recommended manga", onShowAll = null) }
                                 illustItems(manga, "No manga recommendations yet", collections = true)
                             }
                             else -> {
-                                item(key = "tagsHeader") { SectionHeader("Trending tags", null) }
-                                if (tags.isEmpty()) {
-                                    item(key = "tagsLoading") {
-                                        Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+                                item(key = "tagsHeader") {
+                                    SectionHeader("Trending", actionLabel = "View all", onShowAll = { nav.push(Screen.Trending(tags)) })
+                                }
+                                item(key = "tagsRow") {
+                                    if (tags.isEmpty()) {
+                                        Box(Modifier.fillMaxWidth().height(180.dp), contentAlignment = Alignment.Center) {
                                             InfiniteProgressIndicator()
                                         }
-                                    }
-                                } else {
-                                    items(tags.chunked(2), key = { it.first().tag }) { pair ->
-                                        Row(
-                                            Modifier.fillMaxWidth().padding(horizontal = 12.dp).padding(bottom = 12.dp),
+                                    } else {
+                                        LazyRow(
+                                            contentPadding = PaddingValues(horizontal = 12.dp),
                                             horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                            modifier = Modifier.padding(bottom = 12.dp),
                                         ) {
-                                            pair.forEach { TagTile(it, Modifier.weight(1f)) }
-                                            if (pair.size == 1) Spacer(Modifier.weight(1f))
+                                            items(tags, key = { it.tag }) { TagTile(it, Modifier.width(150.dp), ratio = 0.72f) }
                                         }
                                     }
                                 }
@@ -225,7 +225,7 @@ fun FeedPage(padding: PaddingValues) {
 }
 
 @Composable
-private fun SectionHeader(title: String, onShowAll: (() -> Unit)?) {
+private fun SectionHeader(title: String, actionLabel: String = "Show all", onShowAll: (() -> Unit)?) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -233,7 +233,7 @@ private fun SectionHeader(title: String, onShowAll: (() -> Unit)?) {
         Text(title, style = MiuixTheme.textStyles.title4, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
         if (onShowAll != null) {
             Text(
-                "Show all",
+                actionLabel,
                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                 fontSize = 14.sp,
                 modifier = Modifier.clickable { onShowAll() }.padding(4.dp),
@@ -269,7 +269,7 @@ private fun WorkTile(a: Illust) {
     Column(Modifier.width(170.dp)) {
         Box(Modifier.size(170.dp).clip(RoundedCornerShape(12.dp))) {
             RemoteImage(a.imageUrl, false, Modifier.fillMaxSize(), crop = true)
-            TapOverlay(Modifier.matchParentSize()) { nav.push(Screen.Viewer(a)) }
+            TapOverlay(Modifier.matchParentSize()) { nav.push(Screen.Post(a)) }
             LikeButton(a, Modifier.align(Alignment.BottomEnd), idleTint = Color.White)
         }
         Text(
@@ -298,9 +298,9 @@ private fun WorkTile(a: Illust) {
 }
 
 @Composable
-private fun TagTile(t: TrendTag, modifier: Modifier) {
+internal fun TagTile(t: TrendTag, modifier: Modifier, ratio: Float = 16f / 9f) {
     val nav = LocalNavigator.current
-    Box(modifier.aspectRatio(16f / 9f).clip(RoundedCornerShape(12.dp))) {
+    Box(modifier.aspectRatio(ratio).clip(RoundedCornerShape(12.dp))) {
         RemoteImage(t.imageUrl, false, Modifier.fillMaxSize(), crop = true)
         Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f)))
         Column(Modifier.align(Alignment.BottomStart).padding(10.dp)) {
@@ -310,5 +310,28 @@ private fun TagTile(t: TrendTag, modifier: Modifier) {
             }
         }
         TapOverlay(Modifier.matchParentSize()) { nav.push(Screen.FeedList("#${t.tag}", "search:${t.tag}")) }
+    }
+}
+
+@Composable
+fun TrendingScreen(tags: List<TrendTag>) {
+    PageScaffold(
+        title = "Trending",
+        padding = PaddingValues(0.dp),
+        overlay = true,
+        navigationIcon = { BackButton() },
+    ) { contentPadding, scrollModifier, _ ->
+        LazyColumn(modifier = scrollModifier, contentPadding = contentPadding) {
+            items(tags.chunked(2), key = { it.first().tag }) { pair ->
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 12.dp).padding(top = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    pair.forEach { TagTile(it, Modifier.weight(1f)) }
+                    if (pair.size == 1) Spacer(Modifier.weight(1f))
+                }
+            }
+            item(key = "end") { Spacer(Modifier.height(24.dp)) }
+        }
     }
 }

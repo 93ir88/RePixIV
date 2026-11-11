@@ -71,3 +71,47 @@ class FeedState(
         items.removeAll { it.id == illust.id || (applyFilters && Filters.isHidden(it)) }
     }
 }
+
+/** Paged list of user search results. */
+class UserSearchState(private val fetch: suspend (String?) -> UserPreviewPage) {
+    val items = mutableStateListOf<UserPreview>()
+    var nextUrl by mutableStateOf<String?>(null)
+        private set
+    var loading by mutableStateOf(false)
+        private set
+    var error by mutableStateOf<String?>(null)
+        private set
+    var loaded by mutableStateOf(false)
+        private set
+
+    suspend fun ensureLoaded() {
+        if (!loaded && !loading) refresh()
+    }
+
+    suspend fun refresh() = load(null, reset = true)
+
+    suspend fun loadMore() {
+        val next = nextUrl ?: return
+        load(next, reset = false)
+    }
+
+    private suspend fun load(url: String?, reset: Boolean) {
+        if (loading) return
+        loading = true
+        error = null
+        try {
+            val p = fetch(url)
+            if (reset) items.clear()
+            val seen = items.mapTo(HashSet()) { it.id }
+            items.addAll(p.items.filter { seen.add(it.id) })
+            nextUrl = p.nextUrl
+            loaded = true
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            error = e.message ?: "Network error"
+        } finally {
+            loading = false
+        }
+    }
+}

@@ -22,6 +22,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.unit.dp
 import com.repixiv.app.pixiv.Filters
+import com.repixiv.app.pixiv.LocalLists
 import com.repixiv.app.pixiv.Pixiv
 import com.repixiv.app.ui.AppTheme
 import com.repixiv.app.ui.keyColorFor
@@ -32,6 +33,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         Pixiv.init(applicationContext)
         Filters.init(applicationContext)
+        LocalLists.init(applicationContext)
 
         setContent {
             var appState by remember { mutableStateOf(AppStateStore.load(this@MainActivity)) }

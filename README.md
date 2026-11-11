@@ -24,6 +24,11 @@ Toolchain mirrors Miuix: JDK 21, Gradle 9.9.0, AGP 9.5.1, Kotlin 2.4.21, compile
   + rising this week). Pull to refresh with the Miuix indicator.
 - **Likes and comments**: heart any post (optimistic, with a pop animation), open and write comments. **Search**: tag/keyword search.
   **Profile**: your account stats and public bookmarks, with an account-settings button (top right).
+- **Post page**: swipeable pages, like/share/menu, caption, tags, stats and date, the artist's works strip
+  (scrolls endlessly), comments with replies, and related works.
+- **Artist page**: cover, premium badge, follow, links, Home / Illustrations / Bookmarks tabs with an endless grid
+  and a swipeable featured carousel.
+- **Search**: history while the bar is focused, favorite tags (add / remove, on-device), illustration and user search.
 - Everything opens inside the app: tap a post for the full-screen zoomable viewer, tap an artist's
   avatar for their page (follow / unfollow).
 - Per-post menu: Download (original quality, saved to Pictures/RePixIV), View full screen,

@@ -6,6 +6,9 @@
 package com.repixiv.app.pages
 
 import android.content.Intent
+import androidx.compose.foundation.layout.PaddingValues
+import com.repixiv.app.pixiv.Follows
+import top.yukonga.miuix.kmp.icon.extended.Copy
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
@@ -345,62 +348,7 @@ internal fun IllustCard(a: Illust, onNotInterested: () -> Unit) {
                 maxLines = 1,
                 modifier = Modifier.padding(start = 10.dp).weight(1f).clickable { nav.openUser(a.userId) },
             )
-            Box {
-                IconButton(onClick = { showMenu = true }) {
-                    Icon(imageVector = MiuixIcons.More, contentDescription = "More", tint = tint)
-                }
-                val entries = listOf<Pair<DropdownItem, () -> Unit>>(
-                    DropdownItem(
-                        text = "Download",
-                        icon = { m -> Icon(imageVector = MiuixIcons.Download, contentDescription = null, modifier = m, tint = tint) },
-                    ) to {
-                        Toast.makeText(context, "Downloading…", Toast.LENGTH_SHORT).show()
-                        scope.launch { Toast.makeText(context, Downloader.save(context, a), Toast.LENGTH_LONG).show() }
-                        Unit
-                    },
-                    DropdownItem(
-                        text = "View full screen",
-                        icon = { m -> Icon(imageVector = MiuixIcons.Image, contentDescription = null, modifier = m, tint = tint) },
-                    ) to { nav.push(Screen.Viewer(a)) },
-                    DropdownItem(
-                        text = "Not interested",
-                        icon = { m -> Icon(imageVector = MiuixIcons.Hide, contentDescription = null, modifier = m, tint = tint) },
-                    ) to {
-                        onNotInterested()
-                        Toast.makeText(context, "Got it, you'll see less like this", Toast.LENGTH_SHORT).show()
-                    },
-                    DropdownItem(
-                        text = "Share",
-                        icon = { m -> Icon(imageVector = MiuixIcons.Share, contentDescription = null, modifier = m, tint = tint) },
-                    ) to {
-                        val send = Intent(Intent.ACTION_SEND).apply {
-                            type = "text/plain"
-                            putExtra(Intent.EXTRA_TEXT, "${a.title} by ${a.userName}\nhttps://www.pixiv.net/artworks/${a.id}")
-                        }
-                        context.startActivity(Intent.createChooser(send, "Share"))
-                    },
-                )
-                OverlayListPopup(
-                    show = showMenu,
-                    alignment = PopupPositionProvider.Align.End,
-                    onDismissRequest = { showMenu = false },
-                ) {
-                    ListPopupColumn {
-                        entries.forEachIndexed { index, (item, action) ->
-                            DropdownImpl(
-                                item = item,
-                                optionSize = entries.size,
-                                isSelected = false,
-                                index = index,
-                                onSelectedIndexChange = {
-                                    showMenu = false
-                                    action()
-                                },
-                            )
-                        }
-                    }
-                }
-            }
+            PostMenuButton(a, onNotInterested)
         }
 
         Box(Modifier.fillMaxWidth()) {
@@ -410,7 +358,7 @@ internal fun IllustCard(a: Illust, onNotInterested: () -> Unit) {
                 Modifier.fillMaxWidth().aspectRatio((a.width.toFloat() / a.height).coerceIn(0.4f, 3f)),
                 crop = false,
             )
-            TapOverlay(Modifier.matchParentSize()) { nav.push(Screen.Viewer(a)) }
+            TapOverlay(Modifier.matchParentSize()) { nav.push(Screen.Post(a)) }
             if (a.pageCount > 1) {
                 Text(
                     "1/${a.pageCount}",
@@ -460,7 +408,7 @@ private fun CollectionTile(work: Illust, modifier: Modifier) {
     val nav = LocalNavigator.current
     Box(modifier.clip(RoundedCornerShape(12.dp))) {
         RemoteImage(work.imageUrl, false, Modifier.fillMaxSize(), crop = true)
-        TapOverlay(Modifier.matchParentSize()) { nav.push(Screen.Viewer(work)) }
+        TapOverlay(Modifier.matchParentSize()) { nav.push(Screen.Post(work)) }
     }
 }
 
@@ -505,6 +453,205 @@ internal fun CollectionBlock(userId: Long, userName: String) {
     }
 }
 
+internal fun shareIllust(context: android.content.Context, a: Illust) {
+    val send = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_TEXT, "${a.title} by ${a.userName}\nhttps://www.pixiv.net/artworks/${a.id}")
+    }
+    context.startActivity(Intent.createChooser(send, "Share"))
+}
+
+/** Three-dots menu shared by feed cards and the post page. */
+@Composable
+internal fun PostMenuButton(a: Illust, onNotInterested: () -> Unit) {
+    val nav = LocalNavigator.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val tint = MiuixTheme.colorScheme.onSurface
+    var showMenu by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { showMenu = true }) {
+            Icon(imageVector = MiuixIcons.More, contentDescription = "More", tint = tint)
+        }
+        val entries = listOf<Pair<DropdownItem, () -> Unit>>(
+            DropdownItem(
+                text = "Download",
+                icon = { m -> Icon(imageVector = MiuixIcons.Download, contentDescription = null, modifier = m, tint = tint) },
+            ) to {
+                Toast.makeText(context, "Downloading…", Toast.LENGTH_SHORT).show()
+                scope.launch { Toast.makeText(context, Downloader.save(context, a), Toast.LENGTH_LONG).show() }
+                Unit
+            },
+            DropdownItem(
+                text = "View full screen",
+                icon = { m -> Icon(imageVector = MiuixIcons.Image, contentDescription = null, modifier = m, tint = tint) },
+            ) to { nav.push(Screen.Viewer(a)) },
+            DropdownItem(
+                text = "Not interested",
+                icon = { m -> Icon(imageVector = MiuixIcons.Hide, contentDescription = null, modifier = m, tint = tint) },
+            ) to {
+                onNotInterested()
+                Toast.makeText(context, "Got it, you'll see less like this", Toast.LENGTH_SHORT).show()
+            },
+            DropdownItem(
+                text = "Share",
+                icon = { m -> Icon(imageVector = MiuixIcons.Share, contentDescription = null, modifier = m, tint = tint) },
+            ) to { shareIllust(context, a) },
+        )
+        OverlayListPopup(
+            show = showMenu,
+            alignment = PopupPositionProvider.Align.End,
+            onDismissRequest = { showMenu = false },
+        ) {
+            ListPopupColumn {
+                entries.forEachIndexed { index, (item, action) ->
+                    DropdownImpl(
+                        item = item,
+                        optionSize = entries.size,
+                        isSelected = false,
+                        index = index,
+                        onSelectedIndexChange = {
+                            showMenu = false
+                            action()
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+internal fun FollowButton(
+    userId: Long,
+    defaultFollowed: Boolean,
+    modifier: Modifier = Modifier,
+    compact: Boolean = true,
+) {
+    if (Pixiv.session?.userId == userId) return
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val following = Follows.isFollowing(userId, defaultFollowed)
+    var busy by remember { mutableStateOf(false) }
+    Button(
+        onClick = {
+            if (busy) return@Button
+            busy = true
+            scope.launch {
+                try {
+                    Follows.toggle(userId, following)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Toast.makeText(context, e.message ?: "Request failed", Toast.LENGTH_SHORT).show()
+                } finally {
+                    busy = false
+                }
+            }
+        },
+        modifier = modifier,
+        cornerRadius = 50.dp,
+        minHeight = if (compact) 32.dp else 44.dp,
+        insideMargin = PaddingValues(horizontal = if (compact) 14.dp else 24.dp, vertical = 0.dp),
+        colors = if (following) ButtonDefaults.buttonColors() else ButtonDefaults.buttonColorsPrimary(),
+    ) {
+        Text(
+            if (following) "Following" else "Follow",
+            fontSize = if (compact) 13.sp else 15.sp,
+            fontWeight = FontWeight.Bold,
+            color = if (following) MiuixTheme.colorScheme.onSurface else MiuixTheme.colorScheme.onPrimary,
+        )
+    }
+}
+
+@Composable
+internal fun PagedFooter(
+    loading: Boolean,
+    error: String?,
+    hasNext: Boolean,
+    emptyAndLoaded: Boolean,
+    emptyText: String,
+    nextKey: Any?,
+    onLoadMore: suspend () -> Unit,
+    onRetry: suspend () -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+    if (hasNext && error == null) {
+        LaunchedEffect(nextKey) { onLoadMore() }
+    }
+    Box(Modifier.fillMaxWidth().padding(20.dp), contentAlignment = Alignment.Center) {
+        when {
+            loading -> InfiniteProgressIndicator()
+            error != null -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(error, color = MiuixTheme.colorScheme.error, textAlign = TextAlign.Center)
+                TextButton(text = "Retry", onClick = { scope.launch { onRetry() } })
+            }
+            emptyAndLoaded -> Text(emptyText, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+        }
+    }
+}
+
+@Composable
+internal fun FeedFooter(feed: FeedState, emptyText: String) {
+    PagedFooter(
+        loading = feed.loading,
+        error = feed.error,
+        hasNext = feed.nextUrl != null,
+        emptyAndLoaded = feed.loaded && feed.items.isEmpty(),
+        emptyText = emptyText,
+        nextKey = feed.nextUrl,
+        onLoadMore = { feed.loadMore() },
+        onRetry = { if (feed.items.isEmpty()) feed.refresh() else feed.loadMore() },
+    )
+}
+
+/** Square-ish grid tile with R-18 / page-count badges and a heart, like pixiv's grids. */
+@Composable
+internal fun GridTile(a: Illust, modifier: Modifier = Modifier) {
+    val nav = LocalNavigator.current
+    Box(modifier.aspectRatio(0.8f)) {
+        RemoteImage(a.imageUrl, false, Modifier.fillMaxSize(), crop = true)
+        TapOverlay(Modifier.matchParentSize()) { nav.push(Screen.Post(a)) }
+        if (a.xRestrict > 0) {
+            Text(
+                if (a.xRestrict > 1) "R-18G" else "R-18",
+                color = Color.White,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 8.dp)
+                    .background(Color(0xFFE84A5F), RoundedCornerShape(6.dp))
+                    .padding(horizontal = 6.dp, vertical = 1.dp),
+            )
+        }
+        if (a.pageCount > 1) {
+            Row(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(8.dp)
+                    .background(Color.Black.copy(alpha = 0.55f), RoundedCornerShape(50))
+                    .padding(horizontal = 8.dp, vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(imageVector = MiuixIcons.Copy, contentDescription = null, modifier = Modifier.size(11.dp), tint = Color.White)
+                Text(a.pageCount.toString(), color = Color.White, fontSize = 11.sp, modifier = Modifier.padding(start = 3.dp))
+            }
+        }
+        LikeButton(a, Modifier.align(Alignment.BottomEnd), idleTint = Color.White)
+    }
+}
+
+internal fun LazyListScope.illustGrid(feed: FeedState, emptyText: String, keyPrefix: String) {
+    items(feed.items.chunked(2), key = { "$keyPrefix-${it.first().id}" }) { row ->
+        Row(Modifier.fillMaxWidth().padding(bottom = 2.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+            row.forEach { GridTile(it, Modifier.weight(1f)) }
+            if (row.size == 1) Spacer(Modifier.weight(1f))
+        }
+    }
+    item(key = "$keyPrefix-footer") { FeedFooter(feed, emptyText) }
+}
+
 internal fun LazyListScope.illustItems(feed: FeedState, emptyText: String, collections: Boolean = false) {
     itemsIndexed(feed.items, key = { _, it -> it.id }) { index, a ->
         Column {
@@ -512,80 +659,7 @@ internal fun LazyListScope.illustItems(feed: FeedState, emptyText: String, colle
             if (collections && (index + 1) % 5 == 0) CollectionBlock(a.userId, a.userName)
         }
     }
-    item(key = "footer") {
-        val scope = rememberCoroutineScope()
-        val next = feed.nextUrl
-        if (next != null && feed.error == null) {
-            LaunchedEffect(next) { feed.loadMore() }
-        }
-        Box(Modifier.fillMaxWidth().padding(20.dp), contentAlignment = Alignment.Center) {
-            when {
-                feed.loading -> InfiniteProgressIndicator()
-                feed.error != null -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(feed.error ?: "", color = MiuixTheme.colorScheme.error, textAlign = TextAlign.Center)
-                    TextButton(
-                        text = "Retry",
-                        onClick = {
-                            scope.launch { if (feed.items.isEmpty()) feed.refresh() else feed.loadMore() }
-                        },
-                    )
-                }
-                feed.loaded && feed.items.isEmpty() -> Text(emptyText, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
-            }
-        }
-    }
-}
-
-// ---------------------------------------------------------------- Search
-
-@Composable
-fun SearchPage(padding: PaddingValues) {
-    val session = Pixiv.session
-    var query by remember { mutableStateOf(TextFieldValue("")) }
-    var submitted by remember { mutableStateOf("") }
-    val feed = remember(submitted, session?.userId) { FeedState(applyFilters = true) { Pixiv.search(submitted, it) } }
-    LaunchedEffect(feed) { if (submitted.isNotBlank() && Pixiv.session != null) feed.refresh() }
-    val keyboard = LocalSoftwareKeyboardController.current
-
-    PageScaffold(title = "Search", padding = padding) { contentPadding, scrollModifier, _ ->
-        if (session == null) {
-            Box(Modifier.fillMaxSize().padding(contentPadding), contentAlignment = Alignment.Center) {
-                LoginPrompt("Log in to search pixiv")
-            }
-        } else {
-            LazyColumn(modifier = scrollModifier, contentPadding = contentPadding) {
-                item(key = "searchField") {
-                    TextField(
-                        value = query,
-                        onValueChange = { query = it },
-                        label = "Search artworks, tags…",
-                        useLabelAsPlaceholder = true,
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                        keyboardActions = KeyboardActions(
-                            onSearch = {
-                                submitted = query.text.trim()
-                                keyboard?.hide()
-                            },
-                        ),
-                        modifier = Modifier.fillMaxWidth().padding(12.dp),
-                    )
-                }
-                if (submitted.isNotBlank()) {
-                    illustItems(feed, "No results for “$submitted”")
-                } else {
-                    item(key = "hint") {
-                        Text(
-                            "Search by tag or keyword",
-                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.fillMaxWidth().padding(24.dp),
-                        )
-                    }
-                }
-            }
-        }
-    }
+    item(key = "footer") { FeedFooter(feed, emptyText) }
 }
 
 // ---------------------------------------------------------------- Profile

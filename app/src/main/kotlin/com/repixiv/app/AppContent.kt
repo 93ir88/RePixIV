@@ -67,6 +67,8 @@ import com.repixiv.app.ui.bakasu.FloatingBottomBar
 import com.repixiv.app.ui.bakasu.FloatingBottomBarItem
 import com.repixiv.app.pages.AccountSettingsScreen
 import com.repixiv.app.pages.CommentsScreen
+import com.repixiv.app.pages.PostScreen
+import com.repixiv.app.pages.TrendingScreen
 import com.repixiv.app.pages.FeedListScreen
 import com.repixiv.app.pages.UserScreen
 import com.repixiv.app.pages.ViewerScreen
@@ -178,7 +180,9 @@ private fun OverlayHost(nav: Navigator) {
                 when (top) {
                     is Screen.Viewer -> ViewerScreen(top.illust, top.page)
                     is Screen.User -> UserScreen(top.userId)
+                    is Screen.Post -> PostScreen(top.illust)
                     is Screen.Comments -> CommentsScreen(top.illust)
+                    is Screen.Trending -> TrendingScreen(top.tags)
                     is Screen.FeedList -> FeedListScreen(top.title, top.kind)
                     Screen.AccountSettings -> AccountSettingsScreen()
                 }

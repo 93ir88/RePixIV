@@ -37,7 +37,24 @@ data class Illust(
     val totalComments: Int,
     val isBookmarked: Boolean,
     val type: String,
+    val caption: String = "",
+    val createDate: String = "",
+    val xRestrict: Int = 0,
+    val tagList: List<Tag> = emptyList(),
+    val userFollowed: Boolean = false,
 )
+
+data class Tag(val name: String, val translated: String)
+
+data class UserPreview(
+    val id: Long,
+    val name: String,
+    val avatar: String,
+    val isFollowed: Boolean,
+    val thumbs: List<String>,
+)
+
+data class UserPreviewPage(val items: List<UserPreview>, val nextUrl: String?)
 
 data class Comment(
     val id: Long,
@@ -64,6 +81,11 @@ data class UserDetail(
     val illusts: Int,
     val bookmarks: Int,
     val isFollowed: Boolean,
+    val background: String = "",
+    val isPremium: Boolean = false,
+    val webpage: String = "",
+    val twitterUrl: String = "",
+    val totalWorks: Int = 0,
 )
 
 data class Session(
@@ -199,11 +221,46 @@ object Pixiv {
             illusts = p?.optInt("total_illusts") ?: 0,
             bookmarks = p?.optInt("total_illust_bookmarks_public") ?: 0,
             isFollowed = u.optBoolean("is_followed"),
+            background = p?.optString("background_image_url")?.takeIf { it != "null" }.orEmpty(),
+            isPremium = p?.optBoolean("is_premium") ?: false,
+            webpage = p?.optString("webpage")?.takeIf { it != "null" }.orEmpty(),
+            twitterUrl = p?.optString("twitter_url")?.takeIf { it != "null" }.orEmpty(),
+            totalWorks = (p?.optInt("total_illusts") ?: 0) + (p?.optInt("total_manga") ?: 0),
         )
     }
 
-    suspend fun userIllusts(userId: Long, nextUrl: String? = null): IllustPage = withContext(Dispatchers.IO) {
-        page(get(nextUrl ?: "$API/v1/user/illusts?user_id=$userId&type=illust&filter=for_android"))
+    /** [type] is "illust", "manga", or null for both. */
+    suspend fun userIllusts(userId: Long, nextUrl: String? = null, type: String? = "illust"): IllustPage = withContext(Dispatchers.IO) {
+        val t = if (type != null) "&type=$type" else ""
+        page(get(nextUrl ?: "$API/v1/user/illusts?user_id=$userId$t&filter=for_android"))
+    }
+
+    suspend fun related(illustId: Long, nextUrl: String? = null): IllustPage = withContext(Dispatchers.IO) {
+        page(get(nextUrl ?: "$API/v2/illust/related?illust_id=$illustId&filter=for_android"))
+    }
+
+    suspend fun searchUsers(word: String, nextUrl: String? = null): UserPreviewPage = withContext(Dispatchers.IO) {
+        val j = get(nextUrl ?: "$API/v1/search/user?filter=for_android&word=${enc(word)}")
+        val arr = j.optJSONArray("user_previews")
+        val out = ArrayList<UserPreview>()
+        if (arr != null) for (i in 0 until arr.length()) runCatching {
+            val o = arr.getJSONObject(i)
+            val u = o.getJSONObject("user")
+            val thumbs = ArrayList<String>()
+            o.optJSONArray("illusts")?.let { ia ->
+                for (k in 0 until ia.length()) {
+                    ia.getJSONObject(k).optJSONObject("image_urls")?.optString("square_medium")?.takeIf { it.isNotBlank() }?.let { thumbs += it }
+                }
+            }
+            out += UserPreview(
+                id = u.getLong("id"),
+                name = u.optString("name"),
+                avatar = u.optJSONObject("profile_image_urls")?.optString("medium").orEmpty(),
+                isFollowed = u.optBoolean("is_followed"),
+                thumbs = thumbs,
+            )
+        }
+        UserPreviewPage(out, j.optString("next_url").takeIf { it.isNotBlank() && it != "null" })
     }
 
     suspend fun setFollow(userId: Long, follow: Boolean) = withContext(Dispatchers.IO) {
@@ -299,8 +356,10 @@ object Pixiv {
         CommentPage(out, j.optString("next_url").takeIf { it.isNotBlank() && it != "null" })
     }
 
-    suspend fun addComment(illustId: Long, text: String) = withContext(Dispatchers.IO) {
-        call("POST", "$API/v1/illust/comment/add", mapOf("illust_id" to illustId.toString(), "comment" to text))
+    suspend fun addComment(illustId: Long, text: String, parentCommentId: Long? = null) = withContext(Dispatchers.IO) {
+        val form = mutableMapOf("illust_id" to illustId.toString(), "comment" to text)
+        if (parentCommentId != null) form["parent_comment_id"] = parentCommentId.toString()
+        call("POST", "$API/v1/illust/comment/add", form)
         Unit
     }
 
@@ -319,7 +378,13 @@ object Pixiv {
         val user = o.getJSONObject("user")
         val tagsArr = o.optJSONArray("tags")
         val tags = ArrayList<String>()
-        if (tagsArr != null) for (i in 0 until tagsArr.length()) tags += tagsArr.getJSONObject(i).optString("name")
+        val tagList = ArrayList<Tag>()
+        if (tagsArr != null) for (i in 0 until tagsArr.length()) {
+            val t = tagsArr.getJSONObject(i)
+            val name = t.optString("name")
+            tags += name
+            tagList += Tag(name, t.optString("translated_name").takeIf { it != "null" }.orEmpty())
+        }
         val imageUrl = img.optString("large").ifEmpty { img.optString("medium") }
         val large = ArrayList<String>()
         val orig = ArrayList<String>()
@@ -353,6 +418,11 @@ object Pixiv {
             totalComments = o.optInt("total_comments"),
             isBookmarked = o.optBoolean("is_bookmarked"),
             type = o.optString("type", "illust"),
+            caption = o.optString("caption").takeIf { it != "null" }.orEmpty(),
+            createDate = o.optString("create_date"),
+            xRestrict = o.optInt("x_restrict"),
+            tagList = tagList,
+            userFollowed = user.optBoolean("is_followed"),
         )
     }
 
