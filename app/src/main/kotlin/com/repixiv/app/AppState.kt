@@ -20,10 +20,11 @@ data class AppState(
     val floatingNavigationBarPosition: Int = 0,
     val enablePageUserScroll: Boolean = true,
     val enableScrollEndHaptic: Boolean = true,
-    val pagerInterceptionMode: Int = 1,
+    val pagerInterceptionMode: Int = 0,
     val enableSquircle: Boolean = true,
     val enableBlur: Boolean = true,
     val blurStyle: Int = 0,
+    val lowRes: Int = 0,
 )
 
 val LocalAppState = compositionLocalOf<AppState> { error("No AppState provided!") }
@@ -35,6 +36,7 @@ object AppStateStore {
     fun load(context: Context): AppState {
         val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val d = AppState()
+        val version = p.getInt("version", 1)
         return AppState(
             colorMode = p.getInt("colorMode", d.colorMode),
             seedIndex = p.getInt("seedIndex", d.seedIndex),
@@ -48,10 +50,12 @@ object AppStateStore {
             floatingNavigationBarPosition = p.getInt("floatingNavigationBarPosition", d.floatingNavigationBarPosition),
             enablePageUserScroll = p.getBoolean("enablePageUserScroll", d.enablePageUserScroll),
             enableScrollEndHaptic = p.getBoolean("enableScrollEndHaptic", d.enableScrollEndHaptic),
-            pagerInterceptionMode = p.getInt("pagerInterceptionMode", d.pagerInterceptionMode),
+            // v1 defaulted to Cross-Axis, which stole swipes from horizontal lists; reset it once.
+            pagerInterceptionMode = if (version < 2) 0 else p.getInt("pagerInterceptionMode", d.pagerInterceptionMode),
             enableSquircle = p.getBoolean("enableSquircle", d.enableSquircle),
             enableBlur = p.getBoolean("enableBlur", d.enableBlur),
             blurStyle = p.getInt("blurStyle", d.blurStyle),
+            lowRes = p.getInt("lowRes", d.lowRes),
         )
     }
 
@@ -73,6 +77,8 @@ object AppStateStore {
             .putBoolean("enableSquircle", s.enableSquircle)
             .putBoolean("enableBlur", s.enableBlur)
             .putInt("blurStyle", s.blurStyle)
+            .putInt("lowRes", s.lowRes)
+            .putInt("version", 2)
             .apply()
     }
 }

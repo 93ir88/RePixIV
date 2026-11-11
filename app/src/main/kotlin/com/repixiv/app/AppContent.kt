@@ -6,13 +6,13 @@
 package com.repixiv.app
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
+import androidx.compose.runtime.key
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -75,7 +75,7 @@ import com.repixiv.app.pages.ViewerScreen
 import com.repixiv.app.pages.FeedPage
 import com.repixiv.app.pages.ProfilePage
 import com.repixiv.app.pages.SearchPage
-import com.repixiv.app.pages.SettingsPage
+import com.repixiv.app.pages.FollowingPage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.job
@@ -99,7 +99,7 @@ import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Contacts
 import top.yukonga.miuix.kmp.icon.extended.Home
 import top.yukonga.miuix.kmp.icon.extended.Search
-import top.yukonga.miuix.kmp.icon.extended.Settings
+import top.yukonga.miuix.kmp.icon.extended.Community
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PagerGestureNestedScrollConnection
 import top.yukonga.miuix.kmp.utils.PagerInterceptionMode
@@ -108,7 +108,7 @@ import top.yukonga.miuix.kmp.utils.pagerGestureOverride
 import top.yukonga.miuix.kmp.utils.springAnimateToPage
 
 object UIConstants {
-    val PAGE_TITLES = listOf("Home", "Search", "Profile", "Settings")
+    val PAGE_TITLES = listOf("Home", "Following", "Search", "Profile")
     const val PAGE_COUNT = 4
 }
 
@@ -124,9 +124,9 @@ fun AppContent(padding: PaddingValues) {
     val navigationItems = remember {
         listOf(
             NavigationItem(UIConstants.PAGE_TITLES[0], MiuixIcons.Home),
-            NavigationItem(UIConstants.PAGE_TITLES[1], MiuixIcons.Search),
-            NavigationItem(UIConstants.PAGE_TITLES[2], MiuixIcons.Contacts),
-            NavigationItem(UIConstants.PAGE_TITLES[3], MiuixIcons.Settings),
+            NavigationItem(UIConstants.PAGE_TITLES[1], MiuixIcons.Community),
+            NavigationItem(UIConstants.PAGE_TITLES[2], MiuixIcons.Search),
+            NavigationItem(UIConstants.PAGE_TITLES[3], MiuixIcons.Contacts),
         )
     }
 
@@ -141,52 +141,59 @@ fun AppContent(padding: PaddingValues) {
             OverlayHost(nav)
         }
     }
-    BackHandler(enabled = nav.stack.isNotEmpty()) { nav.pop() }
+    BackHandler(enabled = nav.hasOpen) { nav.pop() }
 
 }
 
-private data class OverlayEntry(val depth: Int, val screen: Screen?)
-
-/** Miuix-style page transitions: new screens spring in from the right, the one below drifts left. */
+/**
+ * Miuix-style stacked pages: every open screen stays composed (so its state and scroll position survive
+ * while another screen is on top). New screens spring in from the right, the one below drifts left.
+ */
 @Composable
 private fun OverlayHost(nav: Navigator) {
-    val entry = OverlayEntry(nav.stack.size, nav.stack.lastOrNull())
-    AnimatedContent(
-        targetState = entry,
-        contentKey = { it.screen },
-        transitionSpec = {
-            val push = targetState.depth > initialState.depth
-            val offsetSpec = spring<IntOffset>(dampingRatio = 1f, stiffness = 380f)
-            val transition = if (push) {
-                (slideInHorizontally(offsetSpec) { it } + fadeIn(tween(120))) togetherWith
-                    (slideOutHorizontally(offsetSpec) { -it / 4 } + fadeOut(tween(220)))
-            } else {
-                (slideInHorizontally(offsetSpec) { -it / 4 } + fadeIn(tween(220))) togetherWith
-                    (slideOutHorizontally(offsetSpec) { it } + fadeOut(tween(160)))
+    val snapshot = nav.entries.toList()
+    snapshot.forEachIndexed { index, entry ->
+        key(entry.id) {
+            val above = snapshot.getOrNull(index + 1)
+            OverlayLayer(nav, entry, aboveProgress = { above?.progress ?: 0f })
+        }
+    }
+}
+
+@Composable
+private fun OverlayLayer(nav: Navigator, entry: NavEntry, aboveProgress: () -> Float) {
+    val progress = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        progress.animateTo(1f, spring(dampingRatio = 1f, stiffness = 380f))
+    }
+    LaunchedEffect(entry.closing) {
+        if (entry.closing) {
+            progress.animateTo(0f, spring(dampingRatio = 1f, stiffness = 380f))
+            nav.remove(entry)
+        }
+    }
+    LaunchedEffect(Unit) {
+        snapshotFlow { progress.value }.collect { entry.progress = it }
+    }
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .graphicsLayer {
+                val above = aboveProgress()
+                translationX = size.width * (1f - progress.value) - size.width * 0.25f * above
+                alpha = (0.4f + 0.6f * progress.value) * (1f - 0.5f * above)
             }
-            transition.apply { targetContentZIndex = if (push) 1f else -1f }
-        },
-        modifier = Modifier.fillMaxSize(),
-        label = "overlay",
-    ) { e ->
-        val top = e.screen
-        if (top != null) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(MiuixTheme.colorScheme.surface)
-                    .pointerInput(Unit) { detectTapGestures { } },
-            ) {
-                when (top) {
-                    is Screen.Viewer -> ViewerScreen(top.illust, top.page)
-                    is Screen.User -> UserScreen(top.userId)
-                    is Screen.Post -> PostScreen(top.illust)
-                    is Screen.Comments -> CommentsScreen(top.illust)
-                    is Screen.Trending -> TrendingScreen(top.tags)
-                    is Screen.FeedList -> FeedListScreen(top.title, top.kind)
-                    Screen.AccountSettings -> AccountSettingsScreen()
-                }
-            }
+            .background(MiuixTheme.colorScheme.surface)
+            .pointerInput(Unit) { detectTapGestures { } },
+    ) {
+        when (val s = entry.screen) {
+            is Screen.Viewer -> ViewerScreen(s.illust, s.page)
+            is Screen.User -> UserScreen(s.userId)
+            is Screen.Post -> PostScreen(s.illust)
+            is Screen.Comments -> CommentsScreen(s.illust)
+            is Screen.Trending -> TrendingScreen(s.tags)
+            is Screen.FeedList -> FeedListScreen(s.title, s.kind)
+            Screen.AccountSettings -> AccountSettingsScreen()
         }
     }
 }
@@ -404,9 +411,9 @@ fun AppPager(
         pageContent = { page ->
             when (page) {
                 0 -> FeedPage(padding = padding)
-                1 -> SearchPage(padding = padding)
-                2 -> ProfilePage(padding = padding)
-                else -> SettingsPage(padding = padding)
+                1 -> FollowingPage(padding = padding)
+                2 -> SearchPage(padding = padding)
+                else -> ProfilePage(padding = padding)
             }
         },
     )

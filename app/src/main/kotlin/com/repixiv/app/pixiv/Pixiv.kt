@@ -42,6 +42,9 @@ data class Illust(
     val xRestrict: Int = 0,
     val tagList: List<Tag> = emptyList(),
     val userFollowed: Boolean = false,
+    val mediumUrl: String = "",
+    val squareUrl: String = "",
+    val mediumUrls: List<String> = emptyList(),
 )
 
 data class Tag(val name: String, val translated: String)
@@ -240,7 +243,10 @@ object Pixiv {
     }
 
     suspend fun searchUsers(word: String, nextUrl: String? = null): UserPreviewPage = withContext(Dispatchers.IO) {
-        val j = get(nextUrl ?: "$API/v1/search/user?filter=for_android&word=${enc(word)}")
+        userPreviews(get(nextUrl ?: "$API/v1/search/user?filter=for_android&word=${enc(word)}"))
+    }
+
+    private fun userPreviews(j: JSONObject): UserPreviewPage {
         val arr = j.optJSONArray("user_previews")
         val out = ArrayList<UserPreview>()
         if (arr != null) for (i in 0 until arr.length()) runCatching {
@@ -260,7 +266,7 @@ object Pixiv {
                 thumbs = thumbs,
             )
         }
-        UserPreviewPage(out, j.optString("next_url").takeIf { it.isNotBlank() && it != "null" })
+        return UserPreviewPage(out, j.optString("next_url").takeIf { it.isNotBlank() && it != "null" })
     }
 
     suspend fun setFollow(userId: Long, follow: Boolean) = withContext(Dispatchers.IO) {
@@ -301,9 +307,13 @@ object Pixiv {
         out
     }
 
-    suspend fun followFeed(nextUrl: String? = null): IllustPage = withContext(Dispatchers.IO) {
-        page(get(nextUrl ?: "$API/v2/illust/follow?restrict=all"))
+    /** [restrict] is "all", "public" or "private". */
+    suspend fun followFeed(nextUrl: String? = null, restrict: String = "all"): IllustPage = withContext(Dispatchers.IO) {
+        page(get(nextUrl ?: "$API/v2/illust/follow?restrict=$restrict"))
     }
+
+    suspend fun following(userId: Long, restrict: String = "public", nextUrl: String? = null): UserPreviewPage =
+        withContext(Dispatchers.IO) { userPreviews(get(nextUrl ?: "$API/v1/user/following?user_id=$userId&restrict=$restrict&filter=for_android")) }
 
     suspend fun ranking(mode: String, nextUrl: String? = null): IllustPage = withContext(Dispatchers.IO) {
         page(get(nextUrl ?: "$API/v1/illust/ranking?mode=${enc(mode)}&filter=for_android"))
@@ -388,16 +398,19 @@ object Pixiv {
         val imageUrl = img.optString("large").ifEmpty { img.optString("medium") }
         val large = ArrayList<String>()
         val orig = ArrayList<String>()
+        val medium = ArrayList<String>()
         val metaPages = o.optJSONArray("meta_pages")
         if (metaPages != null && metaPages.length() > 0) {
             for (i in 0 until metaPages.length()) {
                 val urls = metaPages.getJSONObject(i).getJSONObject("image_urls")
                 val l = urls.optString("large").ifEmpty { urls.optString("medium") }
                 large += l
+                medium += urls.optString("medium").ifEmpty { l }
                 orig += urls.optString("original").ifEmpty { l }
             }
         } else {
             large += imageUrl
+            medium += img.optString("medium").ifEmpty { imageUrl }
             orig += (o.optJSONObject("meta_single_page")?.optString("original_image_url").orEmpty()).ifEmpty { imageUrl }
         }
         return Illust(
@@ -423,6 +436,9 @@ object Pixiv {
             xRestrict = o.optInt("x_restrict"),
             tagList = tagList,
             userFollowed = user.optBoolean("is_followed"),
+            mediumUrl = img.optString("medium"),
+            squareUrl = img.optString("square_medium"),
+            mediumUrls = medium,
         )
     }
 

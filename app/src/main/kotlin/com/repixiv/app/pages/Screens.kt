@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -76,6 +78,9 @@ import com.repixiv.app.pixiv.UserDetail
 import com.repixiv.app.util.AdaptiveTopAppBar
 import com.repixiv.app.util.RemoteImage
 import com.repixiv.app.util.pageScrollModifiers
+import com.repixiv.app.util.fullUrl
+import com.repixiv.app.util.lowResCap
+import com.repixiv.app.util.pageUrl
 import com.repixiv.app.util.pixivGlideUrl
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -109,6 +114,7 @@ fun ViewerScreen(illust: Illust, startPage: Int) {
     val pageCount = illust.largeUrls.size.coerceAtLeast(1)
     val pagerState = rememberPagerState(initialPage = startPage.coerceIn(0, pageCount - 1), pageCount = { pageCount })
     var zoomed by remember { mutableStateOf(false) }
+    val cap = lowResCap(LocalAppState.current.lowRes)
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         HorizontalPager(
@@ -117,8 +123,9 @@ fun ViewerScreen(illust: Illust, startPage: Int) {
             modifier = Modifier.fillMaxSize(),
         ) { page ->
             ZoomableImage(
-                previewUrl = illust.largeUrls.getOrElse(page) { illust.imageUrl },
-                fullUrl = illust.originalUrls.getOrElse(page) { illust.imageUrl },
+                previewUrl = illust.pageUrl(page, if (cap == 0) 720 else cap),
+                fullUrl = illust.fullUrl(page, cap),
+                maxPx = if (cap == 0) 2560 else cap,
                 onZoomChange = { zoomed = it },
             )
         }
@@ -155,7 +162,7 @@ fun ViewerScreen(illust: Illust, startPage: Int) {
 }
 
 @Composable
-private fun ZoomableImage(previewUrl: String, fullUrl: String, onZoomChange: (Boolean) -> Unit) {
+private fun ZoomableImage(previewUrl: String, fullUrl: String, maxPx: Int, onZoomChange: (Boolean) -> Unit) {
     val context = LocalContext.current
     var bitmap by remember(fullUrl) { mutableStateOf<ImageBitmap?>(null) }
     var fullLoaded by remember(fullUrl) { mutableStateOf(false) }
@@ -171,7 +178,7 @@ private fun ZoomableImage(previewUrl: String, fullUrl: String, onZoomChange: (Bo
         onDispose { Glide.with(context).clear(target) }
     }
     DisposableEffect(fullUrl) {
-        val target = object : CustomTarget<Bitmap>(2560, 2560) {
+        val target = object : CustomTarget<Bitmap>(maxPx, maxPx) {
             override fun onResourceReady(resource: Bitmap, transition: Transition<in Bitmap>?) {
                 fullLoaded = true
                 bitmap = resource.asImageBitmap()
@@ -418,15 +425,15 @@ fun AccountSettingsScreen() {
     var error by remember { mutableStateOf<String?>(null) }
     var hiddenCount by remember { mutableIntStateOf(Filters.hiddenCount) }
 
-    LaunchedEffect(session == null) { if (session == null) nav.pop() }
-    LaunchedEffect(Unit) {
+    LaunchedEffect(session?.userId) {
+        if (session == null) return@LaunchedEffect
         try { restricted = Pixiv.restrictedMode() } catch (e: CancellationException) { throw e } catch (e: Exception) { error = e.message }
         try { showAi = Pixiv.showAi() } catch (e: CancellationException) { throw e } catch (e: Exception) { error = e.message }
         try { flags = Pixiv.accountState() } catch (e: CancellationException) { throw e } catch (e: Exception) { /* optional info */ }
     }
 
     PageScaffold(
-        title = "Account settings",
+        title = "Settings",
         padding = PaddingValues(0.dp),
         overlay = true,
         navigationIcon = { BackButton() },
@@ -434,99 +441,114 @@ fun AccountSettingsScreen() {
         LazyColumn(modifier = scrollModifier, contentPadding = contentPadding) {
             if (session != null) {
                 item(key = "account") {
-                    SmallTitle("Account")
-                    Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
-                        BasicComponent(title = "Name", summary = session.name)
-                        BasicComponent(title = "pixiv ID", summary = session.account)
-                        BasicComponent(title = "User ID", summary = session.userId.toString())
-                        AccountFlagLabels.forEach { (key, label) ->
-                            flags[key]?.let { BasicComponent(title = label, summary = if (it) "Yes" else "No") }
+                    Column {
+                        SmallTitle("Account")
+                        Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
+                            BasicComponent(title = "Name", summary = session.name)
+                            BasicComponent(title = "pixiv ID", summary = session.account)
+                            BasicComponent(title = "User ID", summary = session.userId.toString())
+                            AccountFlagLabels.forEach { (key, label) ->
+                                flags[key]?.let { BasicComponent(title = label, summary = if (it) "Yes" else "No") }
+                            }
+                        }
+                    }
+                }
+                item(key = "privacy") {
+                    Column {
+                        SmallTitle("Content & privacy")
+                        Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
+                            SwitchPreference(
+                                title = "Restricted mode",
+                                summary = "Hide potentially mature content",
+                                checked = restricted ?: false,
+                                enabled = restricted != null,
+                                onCheckedChange = { v ->
+                                    val old = restricted
+                                    restricted = v
+                                    error = null
+                                    scope.launch {
+                                        try {
+                                            Pixiv.setRestrictedMode(v)
+                                        } catch (e: CancellationException) {
+                                            throw e
+                                        } catch (e: Exception) {
+                                            restricted = old
+                                            error = e.message ?: "Could not update setting"
+                                        }
+                                    }
+                                },
+                            )
+                            SwitchPreference(
+                                title = "Show AI-generated works",
+                                summary = "Include AI-generated works in feeds and search",
+                                checked = showAi ?: true,
+                                enabled = showAi != null,
+                                onCheckedChange = { v ->
+                                    val old = showAi
+                                    showAi = v
+                                    error = null
+                                    scope.launch {
+                                        try {
+                                            Pixiv.setShowAi(v)
+                                        } catch (e: CancellationException) {
+                                            throw e
+                                        } catch (e: Exception) {
+                                            showAi = old
+                                            error = e.message ?: "Could not update setting"
+                                        }
+                                    }
+                                },
+                            )
                         }
                     }
                 }
             }
-            item(key = "privacy") {
-                SmallTitle("Content & privacy")
-                Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
-                    SwitchPreference(
-                        title = "Restricted mode",
-                        summary = "Hide potentially mature content",
-                        checked = restricted ?: false,
-                        enabled = restricted != null,
-                        onCheckedChange = { v ->
-                            val old = restricted
-                            restricted = v
-                            error = null
-                            scope.launch {
-                                try {
-                                    Pixiv.setRestrictedMode(v)
-                                } catch (e: CancellationException) {
-                                    throw e
-                                } catch (e: Exception) {
-                                    restricted = old
-                                    error = e.message ?: "Could not update setting"
-                                }
-                            }
-                        },
-                    )
-                    SwitchPreference(
-                        title = "Show AI-generated works",
-                        summary = "Include AI-generated works in feeds and search",
-                        checked = showAi ?: true,
-                        enabled = showAi != null,
-                        onCheckedChange = { v ->
-                            val old = showAi
-                            showAi = v
-                            error = null
-                            scope.launch {
-                                try {
-                                    Pixiv.setShowAi(v)
-                                } catch (e: CancellationException) {
-                                    throw e
-                                } catch (e: Exception) {
-                                    showAi = old
-                                    error = e.message ?: "Could not update setting"
-                                }
-                            }
-                        },
-                    )
-                }
-            }
             item(key = "device") {
-                SmallTitle("On this device")
-                Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
-                    ArrowPreference(
-                        title = "Reset “Not interested”",
-                        summary = "$hiddenCount hidden post(s). Tap to show them again.",
-                        onClick = {
-                            Filters.reset()
-                            hiddenCount = 0
-                            Toast.makeText(context, "Filters reset", Toast.LENGTH_SHORT).show()
-                        },
-                    )
+                Column {
+                    SmallTitle("On this device")
+                    Card(modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp)) {
+                        ArrowPreference(
+                            title = "Reset “Not interested”",
+                            summary = "$hiddenCount hidden post(s). Tap to show them again.",
+                            onClick = {
+                                Filters.reset()
+                                hiddenCount = 0
+                                Toast.makeText(context, "Filters reset", Toast.LENGTH_SHORT).show()
+                            },
+                        )
+                    }
                 }
             }
-            item(key = "footer") {
-                error?.let {
-                    Text(
-                        it,
-                        color = MiuixTheme.colorScheme.error,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp),
-                    )
+            if (session != null) {
+                item(key = "logout") {
+                    Column {
+                        error?.let {
+                            Text(
+                                it,
+                                color = MiuixTheme.colorScheme.error,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp),
+                            )
+                        }
+                        Button(
+                            onClick = {
+                                Pixiv.logout()
+                                nav.pop()
+                            },
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+                        ) { Text("Log out") }
+                        Text(
+                            "Email, password and pixiv ID changes aren't available through pixiv's app API.",
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                            fontSize = 12.sp,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 16.dp),
+                        )
+                    }
                 }
-                Button(
-                    onClick = { Pixiv.logout() },
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
-                ) { Text("Log out") }
-                Text(
-                    "Email, password and pixiv ID changes aren't available through pixiv's app API.",
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                    fontSize = 12.sp,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth().padding(24.dp),
-                )
             }
+            repixivSettingsItems()
+            item(key = "bottomSpace") { Spacer(Modifier.height(24.dp)) }
         }
     }
 }

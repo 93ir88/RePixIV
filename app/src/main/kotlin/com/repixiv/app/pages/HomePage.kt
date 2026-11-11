@@ -56,6 +56,7 @@ import com.repixiv.app.pixiv.Illust
 import com.repixiv.app.pixiv.Pixiv
 import com.repixiv.app.pixiv.TrendTag
 import com.repixiv.app.util.RemoteImage
+import com.repixiv.app.util.cardUrl
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
@@ -268,7 +269,7 @@ private fun WorkTile(a: Illust) {
     val nav = LocalNavigator.current
     Column(Modifier.width(170.dp)) {
         Box(Modifier.size(170.dp).clip(RoundedCornerShape(12.dp))) {
-            RemoteImage(a.imageUrl, false, Modifier.fillMaxSize(), crop = true)
+            RemoteImage(a.cardUrl(), false, Modifier.fillMaxSize(), crop = true)
             TapOverlay(Modifier.matchParentSize()) { nav.push(Screen.Post(a)) }
             LikeButton(a, Modifier.align(Alignment.BottomEnd), idleTint = Color.White)
         }

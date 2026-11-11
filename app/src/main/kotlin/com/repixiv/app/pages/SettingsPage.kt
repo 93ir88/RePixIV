@@ -15,7 +15,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -59,215 +59,160 @@ private val ColorSpecOptions = ThemeColorSpec.entries.map { it.name }
 private val KeyColorOptions = listOf("Default") + KeyColors.map { it.first }
 private val FloatingNavigationBarPositionOptions = listOf("Center", "Start", "End")
 private val BlurStyleOptions = listOf("Gaussian", "Progressive")
+private val LowResOptions = listOf("Disabled", "144p (Ultra Low)", "480p", "720p")
 private val PagerGestureModeOptions = listOf("Default", "Cross-Axis", "iOS-like")
 
 private const val MIUIX_URL = "https://github.com/compose-miuix-ui/miuix"
 private const val BAKASU_URL = "https://github.com/Baka-SU/BakaSU"
 
-@Composable
-fun SettingsPage(padding: PaddingValues) {
-    val appState = LocalAppState.current
-    val backdrop = rememberBlurBackdrop()
-    val blurActive = backdrop != null
-    val barColor = if (blurActive) Color.Transparent else MiuixTheme.colorScheme.surface
-    val topAppBarScrollBehavior = MiuixScrollBehavior()
-
-    val context = LocalContext.current
-    val versionText = remember(context) {
-        runCatching {
-            val info = context.packageManager.getPackageInfo(context.packageName, 0)
-            "v${info.versionName} (${PackageInfoCompat.getLongVersionCode(info)})"
-        }.getOrDefault("")
-    }
-
-    Scaffold(
-        topBar = {
-            BlurredBar(backdrop, blurActive, topAppBarScrollBehavior) {
-                AdaptiveTopAppBar(
-                    title = "Settings",
-                    showTopAppBar = appState.showTopAppBar,
-                    scrollBehavior = topAppBarScrollBehavior,
-                    color = barColor,
-                    subtitle = versionText,
+/** The app-wide settings, shown as the "RePixIV settings" category inside Settings. */
+internal fun LazyListScope.repixivSettingsItems() {
+    item(key = "settingsTitle") { SmallTitle("RePixIV settings") }
+    item(key = "settingsUi") {
+        val appState = LocalAppState.current
+        val updateAppState = LocalUpdateAppState.current
+        Card(
+            modifier = Modifier.padding(12.dp),
+        ) {
+            OverlayDropdownPreference(
+                title = "Color Mode",
+                items = ColorModeOptions,
+                selectedIndex = appState.colorMode,
+                onSelectedIndexChange = { updateAppState { state -> state.copy(colorMode = it) } },
+            )
+            AnimatedVisibility(visible = appState.colorMode in 3..5) {
+                OverlayDropdownPreference(
+                    title = "Key Color",
+                    items = KeyColorOptions,
+                    selectedIndex = appState.seedIndex,
+                    onSelectedIndexChange = { updateAppState { state -> state.copy(seedIndex = it) } },
                 )
             }
-        },
-    ) { innerPadding ->
-        SettingsContent(
-            padding = PaddingValues(
-                top = innerPadding.calculateTopPadding(),
-                bottom = padding.calculateBottomPadding(),
-            ),
-            topAppBarScrollBehavior = topAppBarScrollBehavior,
-            backdrop = backdrop,
-        )
-    }
-}
-
-@Composable
-private fun SettingsContent(
-    padding: PaddingValues,
-    topAppBarScrollBehavior: ScrollBehavior,
-    backdrop: LayerBackdrop?,
-) {
-    val appState = LocalAppState.current
-    val updateAppState = LocalUpdateAppState.current
-    val uriHandler = LocalUriHandler.current
-    val lazyListState = rememberLazyListState()
-
-    val contentPadding = pageContentPadding(padding, padding)
-    Box(modifier = if (backdrop != null) Modifier.layerBackdrop(backdrop) else Modifier) {
-        LazyColumn(
-            state = lazyListState,
-            modifier = Modifier.pageScrollModifiers(
-                appState.enableScrollEndHaptic,
-                appState.showTopAppBar,
-                topAppBarScrollBehavior,
-            ),
-            contentPadding = contentPadding,
-        ) {
-            item(key = "settingsUi") {
-                Card(
-                    modifier = Modifier.padding(12.dp),
-                ) {
+            AnimatedVisibility(visible = appState.colorMode in 3..5 && appState.seedIndex > 0) {
+                Column {
                     OverlayDropdownPreference(
-                        title = "Color Mode",
-                        items = ColorModeOptions,
-                        selectedIndex = appState.colorMode,
-                        onSelectedIndexChange = { updateAppState { state -> state.copy(colorMode = it) } },
+                        title = "Palette Style",
+                        items = PaletteStyleOptions,
+                        selectedIndex = appState.paletteStyle,
+                        onSelectedIndexChange = { updateAppState { state -> state.copy(paletteStyle = it) } },
                     )
-                    AnimatedVisibility(visible = appState.colorMode in 3..5) {
-                        OverlayDropdownPreference(
-                            title = "Key Color",
-                            items = KeyColorOptions,
-                            selectedIndex = appState.seedIndex,
-                            onSelectedIndexChange = { updateAppState { state -> state.copy(seedIndex = it) } },
-                        )
-                    }
-                    AnimatedVisibility(visible = appState.colorMode in 3..5 && appState.seedIndex > 0) {
-                        Column {
-                            OverlayDropdownPreference(
-                                title = "Palette Style",
-                                items = PaletteStyleOptions,
-                                selectedIndex = appState.paletteStyle,
-                                onSelectedIndexChange = { updateAppState { state -> state.copy(paletteStyle = it) } },
-                            )
-                            OverlayDropdownPreference(
-                                title = "Color Spec",
-                                items = ColorSpecOptions,
-                                selectedIndex = appState.colorSpec,
-                                onSelectedIndexChange = { updateAppState { state -> state.copy(colorSpec = it) } },
-                            )
-                        }
-                    }
-                    AnimatedVisibility(visible = isRuntimeShaderSupported()) {
-                        SwitchPreference(
-                            title = "Enable Squircle Shapes",
-                            checked = appState.enableSquircle,
-                            onCheckedChange = { updateAppState { state -> state.copy(enableSquircle = it) } },
-                        )
-                    }
-                    AnimatedVisibility(visible = isRuntimeShaderSupported()) {
-                        SwitchPreference(
-                            title = "Enable Blur Effect",
-                            checked = appState.enableBlur,
-                            onCheckedChange = { updateAppState { state -> state.copy(enableBlur = it) } },
-                        )
-                    }
-                    SwitchPreference(
-                        title = "Enable Scroll End Haptic",
-                        checked = appState.enableScrollEndHaptic,
-                        onCheckedChange = { updateAppState { state -> state.copy(enableScrollEndHaptic = it) } },
-                    )
-                    SwitchPreference(
-                        title = "Enable Page User Scroll",
-                        checked = appState.enablePageUserScroll,
-                        onCheckedChange = { updateAppState { state -> state.copy(enablePageUserScroll = it) } },
-                    )
-                    AnimatedVisibility(visible = appState.enablePageUserScroll) {
-                        OverlayDropdownPreference(
-                            title = "Pager Gesture Mode",
-                            items = PagerGestureModeOptions,
-                            selectedIndex = appState.pagerInterceptionMode,
-                            onSelectedIndexChange = { updateAppState { state -> state.copy(pagerInterceptionMode = it) } },
-                        )
-                    }
-                    SwitchPreference(
-                        title = "Show TopAppBar",
-                        checked = appState.showTopAppBar,
-                        onCheckedChange = { updateAppState { state -> state.copy(showTopAppBar = it) } },
-                    )
-                    AnimatedVisibility(visible = appState.showTopAppBar && appState.enableBlur && isRuntimeShaderSupported()) {
-                        OverlayDropdownPreference(
-                            title = "TopAppBar Blur Style",
-                            items = BlurStyleOptions,
-                            selectedIndex = appState.blurStyle,
-                            onSelectedIndexChange = { updateAppState { state -> state.copy(blurStyle = it) } },
-                        )
-                    }
-                    SwitchPreference(
-                        title = "Show NavigationBar",
-                        checked = appState.showNavigationBar,
-                        onCheckedChange = { updateAppState { state -> state.copy(showNavigationBar = it) } },
-                    )
-                    AnimatedVisibility(visible = appState.showNavigationBar) {
-                        SwitchPreference(
-                            title = "Show Navigation Badge",
-                            checked = appState.showNavigationBarBadge,
-                            onCheckedChange = { updateAppState { state -> state.copy(showNavigationBarBadge = it) } },
-                        )
-                    }
-                    AnimatedVisibility(visible = appState.showNavigationBar && !appState.useFloatingNavigationBar) {
-                        OverlayDropdownPreference(
-                            title = "NavigationBar Mode",
-                            items = NavigationBarDisplayModeOptions,
-                            selectedIndex = appState.navigationBarMode,
-                            onSelectedIndexChange = { updateAppState { state -> state.copy(navigationBarMode = it) } },
-                        )
-                    }
-                    AnimatedVisibility(visible = appState.showNavigationBar) {
-                        Column {
-                            SwitchPreference(
-                                title = "Use FloatingNavigationBar",
-                                summary = "Liquid-glass floating bar from BakaSU",
-                                checked = appState.useFloatingNavigationBar,
-                                onCheckedChange = { updateAppState { state -> state.copy(useFloatingNavigationBar = it) } },
-                            )
-                            AnimatedVisibility(visible = appState.useFloatingNavigationBar) {
-                                OverlayDropdownPreference(
-                                    title = "FloatingNavigationBar Position",
-                                    items = FloatingNavigationBarPositionOptions,
-                                    selectedIndex = appState.floatingNavigationBarPosition,
-                                    onSelectedIndexChange = { updateAppState { state -> state.copy(floatingNavigationBarPosition = it) } },
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-            item(key = "settingsAbout") {
-                SmallTitle("Other")
-                Card(
-                    modifier = Modifier.padding(horizontal = 12.dp),
-                ) {
-                    ArrowPreference(
-                        title = "UI design credits",
-                        summary = "Design & components by Miuix (compose-miuix-ui), Apache-2.0",
-                        onClick = { uriHandler.openUri(MIUIX_URL) },
-                    )
-                    ArrowPreference(
-                        title = "Floating bar credits",
-                        summary = "Liquid-glass bar by BakaSU (GPL-3.0), based on Miuix and Kyant0's AndroidLiquidGlass",
-                        onClick = { uriHandler.openUri(BAKASU_URL) },
+                    OverlayDropdownPreference(
+                        title = "Color Spec",
+                        items = ColorSpecOptions,
+                        selectedIndex = appState.colorSpec,
+                        onSelectedIndexChange = { updateAppState { state -> state.copy(colorSpec = it) } },
                     )
                 }
             }
-            item { Spacer(modifier = Modifier.height(12.dp)) }
+            AnimatedVisibility(visible = isRuntimeShaderSupported()) {
+                SwitchPreference(
+                    title = "Enable Squircle Shapes",
+                    checked = appState.enableSquircle,
+                    onCheckedChange = { updateAppState { state -> state.copy(enableSquircle = it) } },
+                )
+            }
+            AnimatedVisibility(visible = isRuntimeShaderSupported()) {
+                SwitchPreference(
+                    title = "Enable Blur Effect",
+                    checked = appState.enableBlur,
+                    onCheckedChange = { updateAppState { state -> state.copy(enableBlur = it) } },
+                )
+            }
+            SwitchPreference(
+                title = "Enable Scroll End Haptic",
+                checked = appState.enableScrollEndHaptic,
+                onCheckedChange = { updateAppState { state -> state.copy(enableScrollEndHaptic = it) } },
+            )
+            SwitchPreference(
+                title = "Enable Page User Scroll",
+                checked = appState.enablePageUserScroll,
+                onCheckedChange = { updateAppState { state -> state.copy(enablePageUserScroll = it) } },
+            )
+            AnimatedVisibility(visible = appState.enablePageUserScroll) {
+                OverlayDropdownPreference(
+                    title = "Pager Gesture Mode",
+                    items = PagerGestureModeOptions,
+                    selectedIndex = appState.pagerInterceptionMode,
+                    onSelectedIndexChange = { updateAppState { state -> state.copy(pagerInterceptionMode = it) } },
+                )
+            }
+            OverlayDropdownPreference(
+                title = "Low-res mode",
+                summary = "Caps image resolution to save data",
+                items = LowResOptions,
+                selectedIndex = appState.lowRes,
+                onSelectedIndexChange = { updateAppState { state -> state.copy(lowRes = it) } },
+            )
+            SwitchPreference(
+                title = "Show TopAppBar",
+                checked = appState.showTopAppBar,
+                onCheckedChange = { updateAppState { state -> state.copy(showTopAppBar = it) } },
+            )
+            AnimatedVisibility(visible = appState.showTopAppBar && appState.enableBlur && isRuntimeShaderSupported()) {
+                OverlayDropdownPreference(
+                    title = "TopAppBar Blur Style",
+                    items = BlurStyleOptions,
+                    selectedIndex = appState.blurStyle,
+                    onSelectedIndexChange = { updateAppState { state -> state.copy(blurStyle = it) } },
+                )
+            }
+            SwitchPreference(
+                title = "Show NavigationBar",
+                checked = appState.showNavigationBar,
+                onCheckedChange = { updateAppState { state -> state.copy(showNavigationBar = it) } },
+            )
+            AnimatedVisibility(visible = appState.showNavigationBar) {
+                SwitchPreference(
+                    title = "Show Navigation Badge",
+                    checked = appState.showNavigationBarBadge,
+                    onCheckedChange = { updateAppState { state -> state.copy(showNavigationBarBadge = it) } },
+                )
+            }
+            AnimatedVisibility(visible = appState.showNavigationBar && !appState.useFloatingNavigationBar) {
+                OverlayDropdownPreference(
+                    title = "NavigationBar Mode",
+                    items = NavigationBarDisplayModeOptions,
+                    selectedIndex = appState.navigationBarMode,
+                    onSelectedIndexChange = { updateAppState { state -> state.copy(navigationBarMode = it) } },
+                )
+            }
+            AnimatedVisibility(visible = appState.showNavigationBar) {
+                Column {
+                    SwitchPreference(
+                        title = "Use FloatingNavigationBar",
+                        summary = "Liquid-glass floating bar from BakaSU",
+                        checked = appState.useFloatingNavigationBar,
+                        onCheckedChange = { updateAppState { state -> state.copy(useFloatingNavigationBar = it) } },
+                    )
+                    AnimatedVisibility(visible = appState.useFloatingNavigationBar) {
+                        OverlayDropdownPreference(
+                            title = "FloatingNavigationBar Position",
+                            items = FloatingNavigationBarPositionOptions,
+                            selectedIndex = appState.floatingNavigationBarPosition,
+                            onSelectedIndexChange = { updateAppState { state -> state.copy(floatingNavigationBarPosition = it) } },
+                        )
+                    }
+                }
+            }
         }
-        VerticalScrollBar(
-            adapter = rememberScrollBarAdapter(lazyListState),
-            modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight(),
-            trackPadding = contentPadding,
-        )
     }
+    item(key = "settingsAbout") {
+        val uriHandler = LocalUriHandler.current
+        SmallTitle("Other")
+        Card(
+            modifier = Modifier.padding(horizontal = 12.dp),
+        ) {
+            ArrowPreference(
+                title = "UI design credits",
+                summary = "Design & components by Miuix (compose-miuix-ui), Apache-2.0",
+                onClick = { uriHandler.openUri(MIUIX_URL) },
+            )
+            ArrowPreference(
+                title = "Floating bar credits",
+                summary = "Liquid-glass bar by BakaSU (GPL-3.0), based on Miuix and Kyant0's AndroidLiquidGlass",
+                onClick = { uriHandler.openUri(BAKASU_URL) },
+            )
+        }
+    }
+
 }

@@ -76,6 +76,8 @@ import com.repixiv.app.pixiv.UserDetail
 import com.repixiv.app.util.AdaptiveTopAppBar
 import com.repixiv.app.util.BlurredBar
 import com.repixiv.app.util.RemoteImage
+import com.repixiv.app.util.relativeTime
+import com.repixiv.app.util.cardUrl
 import com.repixiv.app.util.pageContentPadding
 import com.repixiv.app.util.pageScrollModifiers
 import com.repixiv.app.util.rememberBlurBackdrop
@@ -323,7 +325,7 @@ private fun CommentsPreview(a: Illust) {
 }
 
 @Composable
-internal fun IllustCard(a: Illust, onNotInterested: () -> Unit) {
+internal fun IllustCard(a: Illust, onNotInterested: () -> Unit, posted: Boolean = false) {
     val nav = LocalNavigator.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -340,19 +342,23 @@ internal fun IllustCard(a: Illust, onNotInterested: () -> Unit) {
                 RemoteImage(a.userAvatar, true, Modifier.fillMaxSize())
                 TapOverlay(Modifier.matchParentSize()) { nav.openUser(a.userId) }
             }
-            Text(
-                a.userName,
-                style = MiuixTheme.textStyles.body1,
-                fontSize = 15.sp,
-                maxLines = 1,
-                modifier = Modifier.padding(start = 10.dp).weight(1f).clickable { nav.openUser(a.userId) },
-            )
+            Column(Modifier.padding(start = 10.dp).weight(1f).clickable { nav.openUser(a.userId) }) {
+                if (posted) {
+                    Row {
+                        Text(a.userName, fontWeight = FontWeight.Bold, fontSize = 15.sp, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
+                        Text(" posted a work", color = summary, fontSize = 15.sp, maxLines = 1)
+                    }
+                    Text(relativeTime(a.createDate), color = summary, fontSize = 12.sp)
+                } else {
+                    Text(a.userName, style = MiuixTheme.textStyles.body1, fontSize = 15.sp, maxLines = 1)
+                }
+            }
             PostMenuButton(a, onNotInterested)
         }
 
         Box(Modifier.fillMaxWidth()) {
             RemoteImage(
-                a.imageUrl,
+                a.cardUrl(),
                 false,
                 Modifier.fillMaxWidth().aspectRatio((a.width.toFloat() / a.height).coerceIn(0.4f, 3f)),
                 crop = false,
@@ -406,7 +412,7 @@ internal fun IllustCard(a: Illust, onNotInterested: () -> Unit) {
 private fun CollectionTile(work: Illust, modifier: Modifier) {
     val nav = LocalNavigator.current
     Box(modifier.clip(RoundedCornerShape(12.dp))) {
-        RemoteImage(work.imageUrl, false, Modifier.fillMaxSize(), crop = true)
+        RemoteImage(work.cardUrl(), false, Modifier.fillMaxSize(), crop = true)
         TapOverlay(Modifier.matchParentSize()) { nav.push(Screen.Post(work)) }
     }
 }
@@ -609,7 +615,7 @@ internal fun FeedFooter(feed: FeedState, emptyText: String) {
 internal fun GridTile(a: Illust, modifier: Modifier = Modifier) {
     val nav = LocalNavigator.current
     Box(modifier.aspectRatio(0.8f)) {
-        RemoteImage(a.imageUrl, false, Modifier.fillMaxSize(), crop = true)
+        RemoteImage(a.cardUrl(), false, Modifier.fillMaxSize(), crop = true)
         TapOverlay(Modifier.matchParentSize()) { nav.push(Screen.Post(a)) }
         if (a.xRestrict > 0) {
             Text(
@@ -651,10 +657,10 @@ internal fun LazyListScope.illustGrid(feed: FeedState, emptyText: String, keyPre
     item(key = "$keyPrefix-footer") { FeedFooter(feed, emptyText) }
 }
 
-internal fun LazyListScope.illustItems(feed: FeedState, emptyText: String, collections: Boolean = false) {
+internal fun LazyListScope.illustItems(feed: FeedState, emptyText: String, collections: Boolean = false, posted: Boolean = false) {
     itemsIndexed(feed.items, key = { _, it -> it.id }) { index, a ->
         Column {
-            IllustCard(a, onNotInterested = { feed.notInterested(a) })
+            IllustCard(a, onNotInterested = { feed.notInterested(a) }, posted = posted)
             if (collections && (index + 1) % 5 == 0) CollectionBlock(a.userId, a.userName)
         }
     }
@@ -671,10 +677,8 @@ fun ProfilePage(padding: PaddingValues) {
         title = "Profile",
         padding = padding,
         actions = {
-            if (session != null) {
-                IconButton(onClick = { nav.push(Screen.AccountSettings) }) {
-                    Icon(MiuixIcons.Settings, "Account settings", tint = MiuixTheme.colorScheme.onSurface)
-                }
+            IconButton(onClick = { nav.push(Screen.AccountSettings) }) {
+                Icon(MiuixIcons.Settings, "Settings", tint = MiuixTheme.colorScheme.onSurface)
             }
         },
     ) { contentPadding, scrollModifier, _ ->

@@ -399,7 +399,7 @@ private fun FavoriteTagSection(tag: String, onViewAll: () -> Unit) {
 }
 
 @Composable
-private fun UserRow(u: UserPreview) {
+internal fun UserRow(u: UserPreview) {
     val nav = LocalNavigator.current
     Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
         Row(

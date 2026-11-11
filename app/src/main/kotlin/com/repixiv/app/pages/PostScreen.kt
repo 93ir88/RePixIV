@@ -58,6 +58,10 @@ import com.repixiv.app.pixiv.Illust
 import com.repixiv.app.pixiv.Likes
 import com.repixiv.app.pixiv.Pixiv
 import com.repixiv.app.util.RemoteImage
+import com.repixiv.app.util.cardUrl
+import com.repixiv.app.util.lowResCap
+import com.repixiv.app.util.pageUrl
+import com.repixiv.app.LocalAppState
 import com.repixiv.app.util.formatPostDate
 import com.repixiv.app.util.htmlToText
 import com.repixiv.app.util.relativeTime
@@ -150,7 +154,7 @@ fun PostScreen(illust: Illust) {
                         modifier = Modifier.fillMaxWidth().aspectRatio(ratio),
                     ) { page ->
                         Box(Modifier.fillMaxSize()) {
-                            RemoteImage(illust.largeUrls.getOrElse(page) { illust.imageUrl }, false, Modifier.fillMaxSize(), crop = false)
+                            RemoteImage(illust.pageUrl(page, lowResCap(LocalAppState.current.lowRes)), false, Modifier.fillMaxSize(), crop = false)
                             TapOverlay(Modifier.matchParentSize()) { nav.push(Screen.Viewer(illust, page)) }
                         }
                     }
@@ -413,7 +417,7 @@ private fun StatChip(icon: androidx.compose.ui.graphics.vector.ImageVector, valu
 private fun StripTile(w: Illust) {
     val nav = LocalNavigator.current
     Box(Modifier.size(128.dp).clip(RoundedCornerShape(10.dp))) {
-        RemoteImage(w.imageUrl, false, Modifier.fillMaxSize(), crop = true)
+        RemoteImage(w.cardUrl(), false, Modifier.fillMaxSize(), crop = true)
         TapOverlay(Modifier.matchParentSize()) { nav.push(Screen.Post(w)) }
         if (w.pageCount > 1) {
             Row(

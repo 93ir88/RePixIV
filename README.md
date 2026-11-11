@@ -34,7 +34,11 @@ Toolchain mirrors Miuix: JDK 21, Gradle 9.9.0, AGP 9.5.1, Kotlin 2.4.21, compile
 - Per-post menu: Download (original quality, saved to Pictures/RePixIV), View full screen,
   Not interested (hides the post and similar ones, stored on-device) and Share (link).
 - Account settings: restricted mode and AI-generated works (synced with pixiv), account info.
-- Tabs swipe like the Miuix example app.
+- Tabs: Home, Following, Search, Profile (swipe between them like the Miuix example app). Screens opened on top of
+  each other form a real stack, so going back never reloads the screen underneath.
+- **Following**: new works from people you follow (All) and who you follow (Users), with a public/private filter.
+- **Settings** live behind the gear icon on the Profile tab: account settings first, then a "RePixIV settings"
+  category with the app options, including **Low-res mode** (Disabled / 144p / 480p / 720p).
 
 ## Settings
 Color Mode (System / Light / Dark / MonetSystem / MonetLight / MonetDark), Key Color, Palette Style,

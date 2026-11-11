@@ -51,6 +51,7 @@ import com.repixiv.app.pixiv.FeedState
 import com.repixiv.app.pixiv.Pixiv
 import com.repixiv.app.pixiv.UserDetail
 import com.repixiv.app.util.RemoteImage
+import com.repixiv.app.util.cardUrl
 import kotlinx.coroutines.CancellationException
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
@@ -252,7 +253,7 @@ private fun FeaturedCarousel(feed: FeedState) {
             val a = feed.items.getOrNull(page)
             if (a != null) {
                 Box(Modifier.fillMaxSize()) {
-                    RemoteImage(a.imageUrl, false, Modifier.fillMaxSize(), crop = true)
+                    RemoteImage(a.cardUrl(), false, Modifier.fillMaxSize(), crop = true)
                     Box(
                         Modifier
                             .fillMaxSize()
