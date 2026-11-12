@@ -24,20 +24,6 @@ Tap a track to play it; tap it again for the glass control panel (stop, repeat, 
 liquid-glass controls are adapted from Kyant's [AndroidLiquidGlass](https://github.com/Kyant0/AndroidLiquidGlass) (Apache-2.0).
 Some tracks can't be embedded (the owner disabled it); those are skipped automatically.
 
-### Setting up Google sign-in (one time)
-Google needs an OAuth client for your build, which only you can create:
-1. [Google Cloud Console](https://console.cloud.google.com) → create a project → *APIs & Services* → enable **YouTube Data API v3**.
-2. *OAuth consent screen*: user type External, then under *Audience* add your Google account as a **test user**.
-   (While the app is in "Testing", Google expires the sign-in after 7 days, so you sign in again weekly. Publishing the app
-   removes that, but `youtube.readonly` is a sensitive scope and needs Google's verification.)
-3. *Credentials* → *Create credentials* → *OAuth client ID* → **Android**, package name `com.repixiv.app`, SHA-1 of the
-   key you sign the APK with. Open *Advanced settings* and turn on **Enable custom URI scheme**.
-4. Give the client id (`1234567890-abc.apps.googleusercontent.com`) to the build: either uncomment `GOOGLE_CLIENT_ID=` in
-   `gradle.properties`, or add a GitHub Actions **variable** named `GOOGLE_CLIENT_ID` (Settings → Secrets and variables →
-   Actions → Variables). It is a public value, not a secret.
-Without a client id the app still builds; the Player tab then says Google sign-in is unavailable.
-The API has a free daily quota (searches cost the most), see the Cloud Console quota page.
-
 ## Build
 Push to `main` → Actions tab → download APK artifact.
 Toolchain mirrors Miuix: JDK 21, Gradle 9.9.0, AGP 9.5.1, Kotlin 2.4.21, compileSdk 37, Miuix 0.9.4 (sources ported from tag v0.9.4).
