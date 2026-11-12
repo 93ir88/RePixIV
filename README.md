@@ -14,18 +14,37 @@ Because it is GPL-3.0 code, distributing RePixIV with it means following the GPL
 (for example, offering the source of your build).
 
 ## Player
-The Player tab plays music inside the app. Tracks come from [Audius](https://audius.co) (open API, no account or keys),
-streamed with Android's MediaPlayer. "For You" shows what you play most in RePixIV, filled up with trending tracks;
-"Favorites" are the tracks you starred (saved on-device); the search bar searches Audius.
+The Player tab plays music inside the app from your **Google / YouTube Music account**. Tap *Sign in with Google*:
+the sign-in page opens in your device's browser (OAuth 2.0 with PKCE, never inside the app) and returns to RePixIV.
+Music comes from the official **YouTube Data API v3** (YouTube Music has no public API; its songs are YouTube videos
+in the Music category) and plays in YouTube's official embedded player, which stays visible above the list while a
+track plays. "For You" shows what you play most in RePixIV, then music you liked on YouTube, then popular music
+for your region; "Favorites" are the tracks you starred (saved on-device); the search bar searches music.
 Tap a track to play it; tap it again for the glass control panel (stop, repeat, speed, restart, volume), whose
 liquid-glass controls are adapted from Kyant's [AndroidLiquidGlass](https://github.com/Kyant0/AndroidLiquidGlass) (Apache-2.0).
+Some tracks can't be embedded (the owner disabled it); those are skipped automatically.
+
+### Setting up Google sign-in (one time)
+Google needs an OAuth client for your build, which only you can create:
+1. [Google Cloud Console](https://console.cloud.google.com) → create a project → *APIs & Services* → enable **YouTube Data API v3**.
+2. *OAuth consent screen*: user type External, then under *Audience* add your Google account as a **test user**.
+   (While the app is in "Testing", Google expires the sign-in after 7 days, so you sign in again weekly. Publishing the app
+   removes that, but `youtube.readonly` is a sensitive scope and needs Google's verification.)
+3. *Credentials* → *Create credentials* → *OAuth client ID* → **Android**, package name `com.repixiv.app`, SHA-1 of the
+   key you sign the APK with. Open *Advanced settings* and turn on **Enable custom URI scheme**.
+4. Give the client id (`1234567890-abc.apps.googleusercontent.com`) to the build: either uncomment `GOOGLE_CLIENT_ID=` in
+   `gradle.properties`, or add a GitHub Actions **variable** named `GOOGLE_CLIENT_ID` (Settings → Secrets and variables →
+   Actions → Variables). It is a public value, not a secret.
+Without a client id the app still builds; the Player tab then says Google sign-in is unavailable.
+The API has a free daily quota (searches cost the most), see the Cloud Console quota page.
 
 ## Build
 Push to `main` → Actions tab → download APK artifact.
 Toolchain mirrors Miuix: JDK 21, Gradle 9.9.0, AGP 9.5.1, Kotlin 2.4.21, compileSdk 37, Miuix 0.9.4 (sources ported from tag v0.9.4).
 
 ## Features
-- **Log in with pixiv** (OAuth + PKCE through the official web login page), or paste a refresh token.
+- **Log in with pixiv** (OAuth + PKCE through the official web login page, opened in your device browser and returned to the app
+  via `pixiv://account/login`), or paste a refresh token. If the official pixiv app is installed it may claim that redirect.
 - **Home** (pixiv-style tabs): *Home* (latest works for you + recommendations with comment previews and
   "Collections by" mosaics), *Illustrations* (daily ranking + following), *Manga*, *Discover* (trending tags
   + rising this week). Pull to refresh with the Miuix indicator.
@@ -52,7 +71,8 @@ Color Mode (System / Light / Dark / MonetSystem / MonetLight / MonetDark), Key C
 Color Spec, Squircle, Blur, Scroll End Haptic, Page User Scroll, Pager Gesture Mode, Show TopAppBar,
 TopAppBar Blur Style, Show NavigationBar, Navigation Badge, NavigationBar Mode and
 **Use FloatingNavigationBar** (+ position Center / Start / End).
+Fresh-install defaults live in `AppState` (`AppState.kt`): Progressive TopAppBar blur and the floating navigation bar (Center) are on.
 
 ## Notes
 This uses pixiv's unofficial mobile app API, which can change without notice. Tokens are stored in
-app-private SharedPreferences.
+app-private SharedPreferences. Android backup is turned off so saved settings and tokens are never restored onto a fresh install.

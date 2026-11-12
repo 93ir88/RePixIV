@@ -5,7 +5,9 @@
 
 package com.repixiv.app.pages
 
+import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.layout.PaddingValues
 import com.repixiv.app.pixiv.Follows
 import top.yukonga.miuix.kmp.icon.extended.Copy
@@ -67,7 +69,6 @@ import com.repixiv.app.LocalAppState
 import com.repixiv.app.LocalNavigator
 import com.repixiv.app.Screen
 import com.repixiv.app.pixiv.Downloader
-import com.repixiv.app.LoginActivity
 import com.repixiv.app.pixiv.FeedState
 import com.repixiv.app.pixiv.Illust
 import com.repixiv.app.pixiv.Pixiv
@@ -180,7 +181,16 @@ internal fun LoginPrompt(message: String, modifier: Modifier = Modifier) {
             textAlign = TextAlign.Center,
         )
         Button(
-            onClick = { context.startActivity(Intent(context, LoginActivity::class.java)) },
+            onClick = {
+                // Sign in with the device browser; pixiv redirects back to pixiv://account/login,
+                // which MainActivity picks up.
+                error = null
+                try {
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(Pixiv.newLoginUrl())))
+                } catch (e: ActivityNotFoundException) {
+                    error = "No browser found on this device"
+                }
+            },
             colors = ButtonDefaults.buttonColorsPrimary(),
             modifier = Modifier.fillMaxWidth(),
         ) {

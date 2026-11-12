@@ -16,14 +16,14 @@ data class AppState(
     val showNavigationBar: Boolean = true,
     val showNavigationBarBadge: Boolean = false,
     val navigationBarMode: Int = 0,
-    val useFloatingNavigationBar: Boolean = false,
+    val useFloatingNavigationBar: Boolean = true,
     val floatingNavigationBarPosition: Int = 0,
     val enablePageUserScroll: Boolean = true,
     val enableScrollEndHaptic: Boolean = true,
     val pagerInterceptionMode: Int = 0,
     val enableSquircle: Boolean = true,
     val enableBlur: Boolean = true,
-    val blurStyle: Int = 0,
+    val blurStyle: Int = 1, // 0 = Gaussian, 1 = Progressive (default for a fresh install)
     val lowRes: Int = 0,
 )
 

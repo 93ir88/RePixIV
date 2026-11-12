@@ -12,4 +12,5 @@ The Player tab's glass controls (app/src/main/kotlin/com/repixiv/app/ui/bakasu/L
 the AndroidLiquidGlass catalog by Kyant (https://github.com/Kyant0/AndroidLiquidGlass), licensed under the
 Apache License 2.0 (see LICENSE-androidliquidglass).
 
-Player music is provided through the public Audius API (https://audius.co); tracks belong to their artists.
+Player music is loaded through the YouTube Data API v3 with the user's own Google account and played in YouTube's official embedded player
+(https://developers.google.com/youtube); tracks belong to their rights holders. YouTube and Google are trademarks of Google LLC.

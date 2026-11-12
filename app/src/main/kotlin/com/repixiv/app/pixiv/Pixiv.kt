@@ -105,7 +105,8 @@ class PixivException(message: String, val httpCode: Int = 0) : Exception(message
 
 /**
  * Minimal client for pixiv's (unofficial) app API, the same one the official mobile app uses.
- * OAuth + PKCE login happens in [com.repixiv.app.LoginActivity].
+ * OAuth + PKCE login happens in the device browser; the pixiv://account/login redirect is handled by
+ * [com.repixiv.app.MainActivity], which calls [exchangeCodeBlocking].
  */
 object Pixiv {
     // Public mobile-app client credentials (also used by pixivpy and other open-source clients).
@@ -160,7 +161,7 @@ object Pixiv {
 
     // ---------- PKCE login ----------
 
-    /** Starts a login attempt and returns the URL to load in a WebView. */
+    /** Starts a login attempt and returns the URL to open in the device browser. */
     fun newLoginUrl(): String {
         val bytes = ByteArray(32).also { SecureRandom().nextBytes(it) }
         val verifier = b64(bytes)

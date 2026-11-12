@@ -23,6 +23,10 @@ object PlayerStore {
         if (prefs != null) return
         val p = context.applicationContext.getSharedPreferences("repixiv_player", Context.MODE_PRIVATE)
         prefs = p
+        // Earlier builds stored Audius track ids, which don't exist on YouTube: start fresh once.
+        if (p.getString("source", null) != "youtube") {
+            p.edit().remove("favorites").remove("plays").putString("source", "youtube").apply()
+        }
         runCatching {
             val arr = JSONArray(p.getString("favorites", "[]"))
             for (i in 0 until arr.length()) favorites += trackOf(arr.getJSONObject(i))

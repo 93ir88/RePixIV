@@ -5,6 +5,11 @@ plugins {
 
 val miuixVersion = "0.9.4"
 
+// Google OAuth client id for the Player tab's "Sign in with Google" (public value, not a secret).
+// Set GOOGLE_CLIENT_ID in gradle.properties or as an environment variable; see README.
+val googleClientId: String = (providers.gradleProperty("GOOGLE_CLIENT_ID").orNull ?: System.getenv("GOOGLE_CLIENT_ID") ?: "").trim()
+val googleRedirectScheme = "com.googleusercontent.apps." + googleClientId.removeSuffix(".apps.googleusercontent.com").ifEmpty { "unconfigured" }
+
 @Suppress("UnstableApiUsage")
 android {
     namespace = "com.repixiv.app"
@@ -19,6 +24,11 @@ android {
         targetSdk = 37
         versionCode = 1
         versionName = "1.0.0"
+        buildConfigField("String", "GOOGLE_CLIENT_ID", "\"$googleClientId\"")
+        manifestPlaceholders["googleRedirectScheme"] = googleRedirectScheme
+    }
+    buildFeatures {
+        buildConfig = true
     }
     buildTypes {
         release {

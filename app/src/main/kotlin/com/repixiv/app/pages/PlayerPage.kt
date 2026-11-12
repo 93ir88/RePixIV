@@ -5,6 +5,7 @@
 
 package com.repixiv.app.pages
 
+import android.view.ViewGroup
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
@@ -26,6 +27,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -65,18 +67,24 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import com.repixiv.app.player.PlayerController
 import com.repixiv.app.player.PlayerState
 import com.repixiv.app.player.PlayerStore
 import com.repixiv.app.player.AppPlayer
-import com.repixiv.app.player.Audius
+import com.repixiv.app.player.GoogleAuth
+import com.repixiv.app.player.YouTubeMusic
 import com.repixiv.app.player.Track
 import com.repixiv.app.ui.bakasu.LiquidGlassButton
 import com.repixiv.app.ui.bakasu.LiquidGlassSlider
 import com.repixiv.app.util.rememberBitmap
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import top.yukonga.miuix.kmp.basic.Button
+import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
@@ -144,14 +152,14 @@ fun PlayerPage(padding: PaddingValues) {
     suspend fun loadTrending() {
         PlayerState.trendingLoading = true
         try {
-            val t = Audius.trending()
+            val t = YouTubeMusic.forYou()
             PlayerState.trending.clear()
             PlayerState.trending.addAll(t)
             PlayerState.trendingError = null
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            PlayerState.trendingError = e.message ?: "Could not load tracks"
+            PlayerState.trendingError = e.message ?: "Could not load music from YouTube"
         } finally {
             PlayerState.trendingLoading = false
         }
@@ -160,6 +168,10 @@ fun PlayerPage(padding: PaddingValues) {
     fun runSearch() {
         val q = query.text.trim()
         if (q.isEmpty()) return
+        if (!GoogleAuth.signedIn) {
+            toast("Sign in with Google to search music")
+            return
+        }
         submitted = q
         searching = true
         searchError = null
@@ -167,7 +179,7 @@ fun PlayerPage(padding: PaddingValues) {
         keyboard?.hide()
         scope.launch {
             try {
-                results = Audius.search(q)
+                results = YouTubeMusic.search(q)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -190,8 +202,13 @@ fun PlayerPage(padding: PaddingValues) {
         scope.launch { PlayerController.play(context, t, list)?.let { toast(it) } }
     }
 
-    LaunchedEffect(Unit) {
-        if (PlayerState.trending.isEmpty()) loadTrending()
+    LaunchedEffect(GoogleAuth.signedIn) {
+        if (GoogleAuth.signedIn) {
+            if (PlayerState.trending.isEmpty()) loadTrending()
+        } else {
+            PlayerState.trending.clear()
+            PlayerState.trendingError = null
+        }
     }
     PlayerState.error?.let { err ->
         LaunchedEffect(err) {
@@ -241,6 +258,10 @@ fun PlayerPage(padding: PaddingValues) {
             onRefresh = {
                 refreshing = true
                 scope.launch {
+                    if (!GoogleAuth.signedIn) {
+                        refreshing = false
+                        return@launch
+                    }
                     try {
                         loadTrending()
                     } finally {
@@ -252,7 +273,19 @@ fun PlayerPage(padding: PaddingValues) {
             contentPadding = contentPadding,
             topAppBarScrollBehavior = scrollBehavior,
         ) {
-            LazyColumn(modifier = scrollModifier, contentPadding = contentPadding) {
+            val showVideo = PlayerState.current != null
+            Column(Modifier.fillMaxSize()) {
+            if (showVideo) {
+                // YouTube's official player, kept visible while a track plays
+                YouTubePlayerCard(Modifier.padding(top = contentPadding.calculateTopPadding() + 8.dp, start = 12.dp, end = 12.dp, bottom = 4.dp))
+            }
+            LazyColumn(
+                modifier = scrollModifier.weight(1f),
+                contentPadding = PaddingValues(
+                    top = if (showVideo) 0.dp else contentPadding.calculateTopPadding(),
+                    bottom = contentPadding.calculateBottomPadding(),
+                ),
+            ) {
                 if (submitted.isNotBlank()) {
                     item(key = "resultsHeader") {
                         SectionRow("Results for “$submitted”", "Clear") {
@@ -271,6 +304,18 @@ fun PlayerPage(padding: PaddingValues) {
                         }
                     }
                 } else if (tab == 0) {
+                    if (!GoogleAuth.signedIn) {
+                        item(key = "googleSignIn") { GoogleSignInPrompt() }
+                    } else {
+                        item(key = "googleSignOut") {
+                            SectionRow("YouTube Music", "Sign out") {
+                                scope.launch {
+                                    AppPlayer.stop()
+                                    withContext(Dispatchers.IO) { GoogleAuth.signOutBlocking() }
+                                }
+                            }
+                        }
+                    }
                     items(forYou, key = { "fy-${it.id}" }) { t -> TrackRow(t) { onTrackTap(t, forYou) } }
                     item(key = "forYouFooter") {
                         Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
@@ -281,7 +326,7 @@ fun PlayerPage(padding: PaddingValues) {
                                     color = MiuixTheme.colorScheme.error,
                                     textAlign = TextAlign.Center,
                                 )
-                                forYou.isEmpty() -> Text(
+                                GoogleAuth.signedIn && forYou.isEmpty() -> Text(
                                     "Nothing to play yet. Pull down to refresh.",
                                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                                     textAlign = TextAlign.Center,
@@ -304,8 +349,64 @@ fun PlayerPage(padding: PaddingValues) {
                     }
                 }
             }
+            } // Column
         }
     }
+}
+
+// ---------------------------------------------------------------- YouTube sign-in and player
+
+@Composable
+private fun GoogleSignInPrompt() {
+    val context = LocalContext.current
+    var error by remember { mutableStateOf<String?>(null) }
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text(
+            if (GoogleAuth.isConfigured) {
+                "Sign in with Google to load your music from YouTube Music"
+            } else {
+                "This build has no Google client id, so Google sign-in is unavailable. See the README to set one up."
+            },
+            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+            textAlign = TextAlign.Center,
+        )
+        if (GoogleAuth.isConfigured) {
+            Button(
+                onClick = {
+                    error = null
+                    try {
+                        // opens Google's sign-in page in the device browser
+                        GoogleAuth.startLogin(context)
+                    } catch (e: android.content.ActivityNotFoundException) {
+                        error = "No browser found on this device"
+                    } catch (e: Exception) {
+                        error = e.message ?: "Couldn't start Google sign-in"
+                    }
+                },
+                colors = ButtonDefaults.buttonColorsPrimary(),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("Sign in with Google", color = MiuixTheme.colorScheme.onPrimary)
+            }
+        }
+        error?.let { Text(it, color = MiuixTheme.colorScheme.error, textAlign = TextAlign.Center) }
+    }
+}
+
+/** Hosts the shared YouTube player WebView (owned by [AppPlayer], so playback survives leaving this page). */
+@Composable
+private fun YouTubePlayerCard(modifier: Modifier = Modifier) {
+    AndroidView(
+        factory = { ctx ->
+            AppPlayer.webView(ctx).also { (it.parent as? ViewGroup)?.removeView(it) }
+        },
+        // YouTube requires the visible player to be at least 200x200
+        modifier = modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(16.dp)),
+    )
 }
 
 // ---------------------------------------------------------------- track row
