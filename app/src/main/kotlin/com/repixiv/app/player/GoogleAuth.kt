@@ -39,8 +39,8 @@ object GoogleAuth {
     /** True when this build was given a Google OAuth client id. */
     val isConfigured: Boolean get() = clientId.endsWith(ID_SUFFIX) && clientId.length > ID_SUFFIX.length
 
-    /** Google's reversed-client-id redirect: com.googleusercontent.apps.<id>:/oauth2redirect */
-    private val redirectScheme: String get() = "com.googleusercontent.apps.${clientId.removeSuffix(ID_SUFFIX)}"
+    /** Android-type OAuth clients use the package name as the redirect scheme: com.repixiv.app:/oauth2redirect */
+    private const val redirectScheme = "com.repixiv.app"
     private val redirectUri: String get() = "$redirectScheme:/oauth2redirect"
 
     var signedIn by mutableStateOf(false)

@@ -39,7 +39,7 @@
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="${googleRedirectScheme}" />
+                <data android:scheme="com.repixiv.app" />
             </intent-filter>
         </activity>
     </application>
