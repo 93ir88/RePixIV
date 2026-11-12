@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -44,6 +45,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -82,6 +84,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
@@ -145,6 +148,9 @@ fun PlayerPage(padding: PaddingValues) {
     var searching by remember { mutableStateOf(false) }
     var searchError by remember { mutableStateOf<String?>(null) }
     var refreshing by remember { mutableStateOf(false) }
+    var searchNext by remember { mutableStateOf<String?>(null) }
+    var loadingMore by remember { mutableStateOf(false) }
+    val listState = rememberLazyListState()
     val pullState = rememberPullToRefreshState()
 
     fun toast(msg: String) = Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
@@ -154,7 +160,8 @@ fun PlayerPage(padding: PaddingValues) {
         try {
             val t = YouTubeMusic.forYou()
             PlayerState.trending.clear()
-            PlayerState.trending.addAll(t)
+            PlayerState.trending.addAll(t.tracks)
+            PlayerState.trendingNext = t.next
             PlayerState.trendingError = null
         } catch (e: CancellationException) {
             throw e
@@ -175,11 +182,14 @@ fun PlayerPage(padding: PaddingValues) {
         submitted = q
         searching = true
         searchError = null
+        searchNext = null
         focusManager.clearFocus()
         keyboard?.hide()
         scope.launch {
             try {
-                results = YouTubeMusic.search(q)
+                val p = YouTubeMusic.search(q)
+                results = p.tracks
+                searchNext = p.next
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -188,6 +198,49 @@ fun PlayerPage(padding: PaddingValues) {
                 searching = false
             }
         }
+    }
+
+    /** Loads the next page of the feed or of the current search when the list end is reached. */
+    suspend fun loadMore() {
+        if (loadingMore || !GoogleAuth.signedIn) return
+        val inSearch = submitted.isNotBlank()
+        var token = (if (inSearch) searchNext else if (tab == 0) PlayerState.trendingNext else null) ?: return
+        val query = submitted
+        loadingMore = true
+        try {
+            // a page can come back empty after filtering (non-embeddable tracks), so try a few
+            var tries = 0
+            while (tries < 3) {
+                val p = if (inSearch) YouTubeMusic.search(query, token) else YouTubeMusic.morePopular(token)
+                if (inSearch) {
+                    results = (results + p.tracks).distinctBy { it.id }
+                    searchNext = p.next
+                } else {
+                    val known = PlayerState.trending.map { it.id }.toSet()
+                    PlayerState.trending.addAll(p.tracks.filter { it.id !in known })
+                    PlayerState.trendingNext = p.next
+                }
+                token = p.next ?: break
+                if (p.tracks.isNotEmpty()) break
+                tries++
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // stop auto-loading after a failure so it doesn't loop; pull to refresh to retry
+            if (inSearch) searchNext = null else PlayerState.trendingNext = null
+            toast(e.message ?: "Couldn't load more")
+        } finally {
+            loadingMore = false
+        }
+    }
+
+    LaunchedEffect(listState) {
+        snapshotFlow {
+            val info = listState.layoutInfo
+            val last = info.visibleItemsInfo.lastOrNull()?.index ?: 0
+            listOf(info.totalItemsCount > 0 && last >= info.totalItemsCount - 5, tab, submitted, PlayerState.trendingNext, searchNext)
+        }.distinctUntilChanged().collect { if (it[0] == true) loadMore() }
     }
 
     // "For You": what you play most, then trending tracks to fill it up
@@ -273,19 +326,7 @@ fun PlayerPage(padding: PaddingValues) {
             contentPadding = contentPadding,
             topAppBarScrollBehavior = scrollBehavior,
         ) {
-            val showVideo = PlayerState.current != null
-            Column(Modifier.fillMaxSize()) {
-            if (showVideo) {
-                // YouTube's official player, kept visible while a track plays
-                YouTubePlayerCard(Modifier.padding(top = contentPadding.calculateTopPadding() + 8.dp, start = 12.dp, end = 12.dp, bottom = 4.dp))
-            }
-            LazyColumn(
-                modifier = scrollModifier.weight(1f),
-                contentPadding = PaddingValues(
-                    top = if (showVideo) 0.dp else contentPadding.calculateTopPadding(),
-                    bottom = contentPadding.calculateBottomPadding(),
-                ),
-            ) {
+            LazyColumn(modifier = scrollModifier, contentPadding = contentPadding, state = listState) {
                 if (submitted.isNotBlank()) {
                     item(key = "resultsHeader") {
                         SectionRow("Results for “$submitted”", "Clear") {
@@ -297,7 +338,7 @@ fun PlayerPage(padding: PaddingValues) {
                     item(key = "resultsFooter") {
                         Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
                             when {
-                                searching -> InfiniteProgressIndicator()
+                                searching || loadingMore -> InfiniteProgressIndicator()
                                 searchError != null -> Text(searchError ?: "", color = MiuixTheme.colorScheme.error, textAlign = TextAlign.Center)
                                 results.isEmpty() -> Text("No tracks found", color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
                             }
@@ -320,7 +361,7 @@ fun PlayerPage(padding: PaddingValues) {
                     item(key = "forYouFooter") {
                         Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
                             when {
-                                PlayerState.trendingLoading -> InfiniteProgressIndicator()
+                                PlayerState.trendingLoading || loadingMore -> InfiniteProgressIndicator()
                                 PlayerState.trendingError != null -> Text(
                                     PlayerState.trendingError ?: "",
                                     color = MiuixTheme.colorScheme.error,
@@ -349,7 +390,6 @@ fun PlayerPage(padding: PaddingValues) {
                     }
                 }
             }
-            } // Column
         }
     }
 }
@@ -395,18 +435,6 @@ private fun GoogleSignInPrompt() {
         }
         error?.let { Text(it, color = MiuixTheme.colorScheme.error, textAlign = TextAlign.Center) }
     }
-}
-
-/** Hosts the shared YouTube player WebView (owned by [AppPlayer], so playback survives leaving this page). */
-@Composable
-private fun YouTubePlayerCard(modifier: Modifier = Modifier) {
-    AndroidView(
-        factory = { ctx ->
-            AppPlayer.webView(ctx).also { (it.parent as? ViewGroup)?.removeView(it) }
-        },
-        // YouTube requires the visible player to be at least 200x200
-        modifier = modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(16.dp)),
-    )
 }
 
 // ---------------------------------------------------------------- track row

@@ -32,6 +32,8 @@ class DampedDragAnimation(
     val initialScale: Float,
     val pressedScale: Float,
     val canDrag: (Offset) -> Boolean = { true },
+    /** Mark drag movement as handled so parents (e.g. the page pager) don't scroll at the same time. */
+    val consumeDrag: Boolean = false,
     val onDragStarted: DampedDragAnimation.(position: Offset) -> Unit,
     val onDragStopped: DampedDragAnimation.() -> Unit,
     val onDragCancelled: DampedDragAnimation.() -> Unit = onDragStopped,
@@ -90,6 +92,7 @@ class DampedDragAnimation(
                 release()
             },
         ) { change, dragAmount ->
+            if (consumeDrag) change.consume()
             val position = change.position
             val previousPosition = change.previousPosition
 

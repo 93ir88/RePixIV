@@ -19,6 +19,9 @@ data class Track(
     val uri: String = "",
 )
 
+/** One page of results; [next] is the token for the following page (null at the end). */
+data class TrackPage(val tracks: List<Track>, val next: String?)
+
 /**
  * Music from the signed-in Google account, through the official YouTube Data API v3.
  * (YouTube Music itself has no public API; its songs and videos are YouTube videos in the "Music" category.)
@@ -28,45 +31,64 @@ object YouTubeMusic {
     private const val API = "https://www.googleapis.com/youtube/v3"
     private const val MUSIC_CATEGORY = "10"
 
-    /** "For You" feed: music you liked on YouTube / YouTube Music, then what's popular in music. */
-    suspend fun forYou(): List<Track> = withContext(Dispatchers.IO) {
+    /** Region whose music chart worked on the first page; later pages must use the same one. */
+    private var chartRegion: String? = null
+
+    /** "For You" feed, first page: music you liked on YouTube / YouTube Music, then what's popular in music. */
+    suspend fun forYou(): TrackPage = withContext(Dispatchers.IO) {
         val liked = runCatching {
             parse(
                 get("$API/videos?part=snippet,status&myRating=like&maxResults=50"),
                 musicOnly = true,
-            )
+            ).tracks
         }.getOrDefault(emptyList())
-        (liked + popular()).distinctBy { it.id }
+        val pop = popular(null)
+        TrackPage((liked + pop.tracks).distinctBy { it.id }, pop.next)
     }
 
-    private fun popular(): List<Track> {
-        val region = Locale.getDefault().country.ifEmpty { "US" }
-        // Not every region has a music chart, so fall back to the US one.
-        for (r in listOf(region, "US").distinct()) {
-            val t = runCatching {
+    /** Next page of the popular-music chart. */
+    suspend fun morePopular(token: String): TrackPage = withContext(Dispatchers.IO) { popular(token) }
+
+    private fun popular(token: String?): TrackPage {
+        val regions = if (token != null && chartRegion != null) {
+            listOf(chartRegion!!)
+        } else {
+            // Not every region has a music chart, so fall back to the US one.
+            listOf(Locale.getDefault().country.ifEmpty { "US" }, "US").distinct()
+        }
+        val page = if (token != null) "&pageToken=${enc(token)}" else ""
+        for (r in regions) {
+            val res = runCatching {
                 parse(
-                    get("$API/videos?part=snippet,status&chart=mostPopular&videoCategoryId=$MUSIC_CATEGORY&maxResults=40&regionCode=$r"),
+                    get("$API/videos?part=snippet,status&chart=mostPopular&videoCategoryId=$MUSIC_CATEGORY&maxResults=50&regionCode=$r$page"),
                     musicOnly = false,
                 )
             }
-            t.getOrNull()?.takeIf { it.isNotEmpty() }?.let { return it }
-            if (r == "US") t.exceptionOrNull()?.let { throw it }
+            res.getOrNull()?.takeIf { it.tracks.isNotEmpty() }?.let {
+                chartRegion = r
+                return it
+            }
+            if (r == regions.last()) res.exceptionOrNull()?.let { throw it }
         }
-        return emptyList()
+        return TrackPage(emptyList(), null)
     }
 
-    suspend fun search(query: String): List<Track> = withContext(Dispatchers.IO) {
+    /** Search music; pass the previous page's [TrackPage.next] as [token] for more. */
+    suspend fun search(query: String, token: String? = null): TrackPage = withContext(Dispatchers.IO) {
+        val page = if (token != null) "&pageToken=${enc(token)}" else ""
         parse(
             get(
                 "$API/search?part=snippet&type=video&videoCategoryId=$MUSIC_CATEGORY&videoEmbeddable=true" +
-                    "&maxResults=30&q=${enc(query)}",
+                    "&maxResults=30&q=${enc(query)}$page",
             ),
             musicOnly = false,
         )
     }
 
-    private fun parse(text: String, musicOnly: Boolean): List<Track> {
-        val arr: JSONArray = JSONObject(text).optJSONArray("items") ?: return emptyList()
+    private fun parse(text: String, musicOnly: Boolean): TrackPage {
+        val root = JSONObject(text)
+        val next = root.optString("nextPageToken").ifEmpty { null }
+        val arr: JSONArray = root.optJSONArray("items") ?: return TrackPage(emptyList(), next)
         val out = ArrayList<Track>()
         for (i in 0 until arr.length()) runCatching {
             val o = arr.getJSONObject(i)
@@ -88,7 +110,7 @@ object YouTubeMusic {
                 image = image,
             )
         }
-        return out.distinctBy { it.id }
+        return TrackPage(out.distinctBy { it.id }, next)
     }
 
     /** The API returns HTML entities (&amp;, &#39;) in titles. */

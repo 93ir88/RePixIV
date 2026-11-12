@@ -13,10 +13,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * In-app audio/video engine: YouTube's official embedded player (IFrame Player API) inside a WebView.
- * The WebView is created once and shown by the Player page (see PlayerPage), so YouTube's player is
- * visible while a track plays, as the YouTube API terms require. Play/pause, repeat, speed, restart and
- * volume all drive the embedded player.
+ * In-app audio engine: YouTube's official embedded player (IFrame Player API) inside a WebView.
+ * The WebView is created once and attached to the main window as a tiny view (see MainActivity), so
+ * playback continues across tabs. Play/pause, repeat, speed, restart and volume all drive the embedded player.
  */
 object AppPlayer {
     /** Identifies this app to YouTube's embed (it expects an origin / referrer). */

@@ -162,6 +162,7 @@ fun LiquidGlassSlider(
                 visibilityThreshold = visibilityThreshold,
                 initialScale = 1f,
                 pressedScale = 1.5f,
+                consumeDrag = true, // dragging the thumb must not swipe pages
                 onDragStarted = {},
                 onDragStopped = {
                     if (didDrag) onValueChangeFinished(targetValue)

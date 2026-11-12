@@ -91,6 +91,8 @@ object PlayerState {
     val trending = mutableStateListOf<Track>()
     var trendingError by mutableStateOf<String?>(null)
     var trendingLoading by mutableStateOf(false)
+    /** Token for the next page of the "For You" feed (null when there is no more). */
+    var trendingNext by mutableStateOf<String?>(null)
 }
 
 object PlayerController {

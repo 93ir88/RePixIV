@@ -17,8 +17,8 @@ Because it is GPL-3.0 code, distributing RePixIV with it means following the GPL
 The Player tab plays music inside the app from your **Google / YouTube Music account**. Tap *Sign in with Google*:
 the sign-in page opens in your device's browser (OAuth 2.0 with PKCE, never inside the app) and returns to RePixIV.
 Music comes from the official **YouTube Data API v3** (YouTube Music has no public API; its songs are YouTube videos
-in the Music category) and plays in YouTube's official embedded player, which stays visible above the list while a
-track plays. "For You" shows what you play most in RePixIV, then music you liked on YouTube, then popular music
+in the Music category) and plays through YouTube's official embedded player (a tiny view kept in the main window, so playback
+continues across tabs). Lists load more as you reach the end. "For You" shows what you play most in RePixIV, then music you liked on YouTube, then popular music
 for your region; "Favorites" are the tracks you starred (saved on-device); the search bar searches music.
 Tap a track to play it; tap it again for the glass control panel (stop, repeat, speed, restart, volume), whose
 liquid-glass controls are adapted from Kyant's [AndroidLiquidGlass](https://github.com/Kyant0/AndroidLiquidGlass) (Apache-2.0).

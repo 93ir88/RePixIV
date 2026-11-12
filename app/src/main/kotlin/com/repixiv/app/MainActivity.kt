@@ -9,6 +9,8 @@ import android.content.Intent
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
+import android.view.ViewGroup
+import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
@@ -23,6 +25,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.unit.dp
+import com.repixiv.app.player.AppPlayer
 import com.repixiv.app.player.GoogleAuth
 import com.repixiv.app.player.PlayerStore
 import com.repixiv.app.pixiv.Filters
@@ -58,6 +61,17 @@ class MainActivity : ComponentActivity() {
         }.start()
     }
 
+    /**
+     * The YouTube player's WebView must stay attached to a window to keep playing, so it lives here as a
+     * 2dp view in the corner instead of a black box in the Player page.
+     */
+    private fun attachPlayerView() {
+        val view = AppPlayer.webView(this)
+        (view.parent as? ViewGroup)?.removeView(view)
+        val px = (2 * resources.displayMetrics.density).toInt().coerceAtLeast(2)
+        addContentView(view, FrameLayout.LayoutParams(px, px))
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
@@ -71,6 +85,7 @@ class MainActivity : ComponentActivity() {
         LocalLists.init(applicationContext)
         PlayerStore.init(applicationContext)
         GoogleAuth.init(applicationContext)
+        attachPlayerView()
         if (savedInstanceState == null) handleLoginRedirect(intent)
 
         setContent {
