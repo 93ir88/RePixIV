@@ -13,13 +13,12 @@ example app and Kyant0's [AndroidLiquidGlass](https://github.com/Kyant0/AndroidL
 Because it is GPL-3.0 code, distributing RePixIV with it means following the GPL-3.0 terms
 (for example, offering the source of your build).
 
-## Player (Spotify)
-The Player tab shows your most played Spotify tracks ("For You"), search, and starred "Favorites" (saved on-device).
-Tap a track to play it (the Spotify app on this phone does the playing, Spotify Premium required); tap it again for
-the glass control panel (stop, repeat, restart, volume). Setup: create an app at developer.spotify.com/dashboard,
-add the redirect URI `repixiv://spotify-callback`, add your account under Users and access, and paste the Client ID.
-Controls use the official Spotify Web API. Glass controls are adapted from Kyant's
-[AndroidLiquidGlass](https://github.com/Kyant0/AndroidLiquidGlass) (Apache-2.0).
+## Player
+The Player tab plays music inside the app. Tracks come from [Audius](https://audius.co) (open API, no account or keys),
+streamed with Android's MediaPlayer. "For You" shows what you play most in RePixIV, filled up with trending tracks;
+"Favorites" are the tracks you starred (saved on-device); the search bar searches Audius.
+Tap a track to play it; tap it again for the glass control panel (stop, repeat, speed, restart, volume), whose
+liquid-glass controls are adapted from Kyant's [AndroidLiquidGlass](https://github.com/Kyant0/AndroidLiquidGlass) (Apache-2.0).
 
 ## Build
 Push to `main` → Actions tab → download APK artifact.

@@ -5,17 +5,19 @@ import android.content.SharedPreferences
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.delay
 import org.json.JSONArray
 import org.json.JSONObject
 
-/** Favorite tracks, saved on this device. */
+/** Favorites and play counts ("most heard"), saved on this device. */
 object PlayerStore {
     private var prefs: SharedPreferences? = null
     val favorites = mutableStateListOf<Track>()
+    private val counts = mutableStateMapOf<String, Int>()
+    private val known = HashMap<String, Track>()
 
     fun init(context: Context) {
         if (prefs != null) return
@@ -23,12 +25,24 @@ object PlayerStore {
         prefs = p
         runCatching {
             val arr = JSONArray(p.getString("favorites", "[]"))
+            for (i in 0 until arr.length()) favorites += trackOf(arr.getJSONObject(i))
+        }
+        runCatching {
+            val arr = JSONArray(p.getString("plays", "[]"))
             for (i in 0 until arr.length()) {
                 val o = arr.getJSONObject(i)
-                favorites += Track(o.getString("id"), o.optString("title"), o.optString("artist"), o.optString("image"), o.optString("uri"))
+                val t = trackOf(o)
+                known[t.id] = t
+                counts[t.id] = o.optInt("count", 1)
             }
         }
     }
+
+    private fun trackOf(o: JSONObject) =
+        Track(o.getString("id"), o.optString("title"), o.optString("artist"), o.optString("image"), o.optString("uri"))
+
+    private fun JSONObject.fill(t: Track): JSONObject =
+        put("id", t.id).put("title", t.title).put("artist", t.artist).put("image", t.image).put("uri", t.uri)
 
     fun isFavorite(id: String) = favorites.any { it.id == id }
 
@@ -36,76 +50,57 @@ object PlayerStore {
         val existing = favorites.indexOfFirst { it.id == track.id }
         if (existing >= 0) favorites.removeAt(existing) else favorites.add(0, track)
         val arr = JSONArray()
-        favorites.forEach {
-            arr.put(JSONObject().put("id", it.id).put("title", it.title).put("artist", it.artist).put("image", it.image).put("uri", it.uri))
-        }
+        favorites.forEach { arr.put(JSONObject().fill(it)) }
         prefs?.edit()?.putString("favorites", arr.toString())?.apply()
     }
+
+    fun recordPlay(track: Track) {
+        known[track.id] = track
+        counts[track.id] = (counts[track.id] ?: 0) + 1
+        // keep the 200 most played
+        if (counts.size > 200) {
+            counts.entries.sortedBy { it.value }.take(counts.size - 200).forEach {
+                counts.remove(it.key)
+                known.remove(it.key)
+            }
+        }
+        val arr = JSONArray()
+        counts.forEach { (id, c) -> known[id]?.let { arr.put(JSONObject().fill(it).put("count", c)) } }
+        prefs?.edit()?.putString("plays", arr.toString())?.apply()
+    }
+
+    /** Your most played tracks, most played first. */
+    fun mostPlayed(limit: Int): List<Track> =
+        counts.entries.sortedByDescending { it.value }.take(limit).mapNotNull { known[it.key] }
 }
 
-/** What's playing right now (mirrors the Spotify app). */
+/** What's playing right now. */
 object PlayerState {
     var current by mutableStateOf<Track?>(null)
     var isPlaying by mutableStateOf(false)
+    var loading by mutableStateOf(false)
+    var error by mutableStateOf<String?>(null)
     var repeat by mutableStateOf("off")
-    var volume by mutableFloatStateOf(50f)
+    var speed by mutableFloatStateOf(1f)
+    var volume by mutableFloatStateOf(80f)
     var optionsOpen by mutableStateOf(false)
-    var lastUserPlayAt = 0L
-    val forYou = mutableStateListOf<Track>()
-    var forYouError by mutableStateOf<String?>(null)
-    var forYouLoading by mutableStateOf(false)
+    val trending = mutableStateListOf<Track>()
+    var trendingError by mutableStateOf<String?>(null)
+    var trendingLoading by mutableStateOf(false)
 }
 
 object PlayerController {
-    private fun friendly(e: SpotifyException): String = when {
-        e.reason == "PREMIUM_REQUIRED" -> "Spotify Premium is required to control playback."
-        e.reason == "NO_ACTIVE_DEVICE" || e.httpCode == 404 -> "Open the Spotify app and play anything once, then try again."
-        else -> e.message ?: "Spotify error"
-    }
-
-    private fun wakeSpotify(context: Context) {
-        context.packageManager.getLaunchIntentForPackage("com.spotify.music")?.let {
-            it.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-            runCatching { context.startActivity(it) }
-        }
-    }
-
-    /** Plays [track] (or resumes when null). Returns an error message, or null on success. */
-    suspend fun play(context: Context, track: Track?): String? {
-        PlayerState.lastUserPlayAt = System.currentTimeMillis()
-        return try {
-            Spotify.play(track?.uri)
-            PlayerState.isPlaying = true
-            null
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: SpotifyException) {
-            if (e.httpCode == 404 || e.reason == "NO_ACTIVE_DEVICE") {
-                wakeSpotify(context)
-                delay(3000)
-                try {
-                    Spotify.play(track?.uri)
-                    PlayerState.isPlaying = true
-                    null
-                } catch (e2: SpotifyException) {
-                    friendly(e2)
-                }
-            } else {
-                friendly(e)
-            }
-        } catch (e: Exception) {
-            e.message ?: "Could not start playback"
-        }
-    }
-
-    suspend fun run(block: suspend () -> Unit): String? = try {
-        block()
+    /** Plays [track] within [queue] and counts it as a listen. Returns an error message or null. */
+    suspend fun play(context: Context, track: Track, queue: List<Track>): String? = try {
+        PlayerState.error = null
+        AppPlayer.play(context, track, queue)
+        PlayerStore.recordPlay(track)
         null
     } catch (e: CancellationException) {
         throw e
-    } catch (e: SpotifyException) {
-        friendly(e)
     } catch (e: Exception) {
-        e.message ?: "Spotify error"
+        PlayerState.loading = false
+        PlayerState.isPlaying = false
+        "Couldn't play this track: ${e.message ?: "unknown error"}"
     }
 }

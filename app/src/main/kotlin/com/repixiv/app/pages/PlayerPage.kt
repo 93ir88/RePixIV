@@ -58,7 +58,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
@@ -69,7 +68,8 @@ import androidx.compose.ui.unit.sp
 import com.repixiv.app.player.PlayerController
 import com.repixiv.app.player.PlayerState
 import com.repixiv.app.player.PlayerStore
-import com.repixiv.app.player.Spotify
+import com.repixiv.app.player.AppPlayer
+import com.repixiv.app.player.Audius
 import com.repixiv.app.player.Track
 import com.repixiv.app.ui.bakasu.LiquidGlassButton
 import com.repixiv.app.ui.bakasu.LiquidGlassSlider
@@ -77,9 +77,6 @@ import com.repixiv.app.util.rememberBitmap
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import top.yukonga.miuix.kmp.basic.Button
-import top.yukonga.miuix.kmp.basic.ButtonDefaults
-import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
@@ -132,7 +129,6 @@ fun PlayerPage(padding: PaddingValues) {
     val scope = rememberCoroutineScope()
     val keyboard = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
-    val connected = Spotify.connected
 
     var tab by remember { mutableIntStateOf(0) }
     var query by remember { mutableStateOf(TextFieldValue("")) }
@@ -145,19 +141,19 @@ fun PlayerPage(padding: PaddingValues) {
 
     fun toast(msg: String) = Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
 
-    suspend fun loadForYou() {
-        PlayerState.forYouLoading = true
+    suspend fun loadTrending() {
+        PlayerState.trendingLoading = true
         try {
-            val t = Spotify.topTracks()
-            PlayerState.forYou.clear()
-            PlayerState.forYou.addAll(t)
-            PlayerState.forYouError = null
+            val t = Audius.trending()
+            PlayerState.trending.clear()
+            PlayerState.trending.addAll(t)
+            PlayerState.trendingError = null
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            PlayerState.forYouError = e.message ?: "Could not load your top tracks"
+            PlayerState.trendingError = e.message ?: "Could not load tracks"
         } finally {
-            PlayerState.forYouLoading = false
+            PlayerState.trendingLoading = false
         }
     }
 
@@ -171,7 +167,7 @@ fun PlayerPage(padding: PaddingValues) {
         keyboard?.hide()
         scope.launch {
             try {
-                results = Spotify.search(q)
+                results = Audius.search(q)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -182,41 +178,25 @@ fun PlayerPage(padding: PaddingValues) {
         }
     }
 
-    fun onTrackTap(t: Track) {
+    // "For You": what you play most, then trending tracks to fill it up
+    val forYou = (PlayerStore.mostPlayed(30) + PlayerState.trending).distinctBy { it.id }
+
+    fun onTrackTap(t: Track, list: List<Track>) {
         if (PlayerState.current?.id == t.id) {
             PlayerState.optionsOpen = !PlayerState.optionsOpen
             return
         }
         PlayerState.optionsOpen = false
-        PlayerState.current = t
-        scope.launch { PlayerController.play(context, t)?.let { toast(it) } }
+        scope.launch { PlayerController.play(context, t, list)?.let { toast(it) } }
     }
 
-    LaunchedEffect(connected) {
-        if (connected && PlayerState.forYou.isEmpty()) loadForYou()
+    LaunchedEffect(Unit) {
+        if (PlayerState.trending.isEmpty()) loadTrending()
     }
-
-    // keep the UI in sync with what the Spotify app is doing
-    LaunchedEffect(connected, PlayerState.current?.id) {
-        while (connected && PlayerState.current != null) {
-            try {
-                val s = Spotify.playbackState()
-                if (s != null) {
-                    PlayerState.isPlaying = s.isPlaying
-                    PlayerState.repeat = s.repeat
-                    s.volume?.let { PlayerState.volume = it.toFloat() }
-                    val t = s.track
-                    if (t != null && t.id != PlayerState.current?.id &&
-                        System.currentTimeMillis() - PlayerState.lastUserPlayAt > 6000
-                    ) {
-                        PlayerState.current = t
-                    }
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (_: Exception) {
-            }
-            delay(3000)
+    PlayerState.error?.let { err ->
+        LaunchedEffect(err) {
+            toast(err)
+            PlayerState.error = null
         }
     }
 
@@ -225,167 +205,105 @@ fun PlayerPage(padding: PaddingValues) {
         padding = padding,
         alwaysShowBar = true,
         bottomContent = {
-            if (connected) {
-                Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp).padding(bottom = 6.dp)) {
-                    TextField(
-                        value = query,
-                        onValueChange = { query = it },
-                        label = "Search music",
-                        useLabelAsPlaceholder = true,
-                        singleLine = true,
-                        leadingIcon = {
-                            Icon(
-                                imageVector = MiuixIcons.Search,
-                                contentDescription = null,
-                                modifier = Modifier.padding(start = 12.dp).size(20.dp),
-                                tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                            )
-                        },
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                        keyboardActions = KeyboardActions(onSearch = { runSearch() }),
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    TabRowWithContour(
-                        tabs = PlayerTabs,
-                        selectedTabIndex = tab,
-                        onTabSelected = {
-                            tab = it
-                            submitted = ""
-                        },
-                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                    )
-                }
+            Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp).padding(bottom = 6.dp)) {
+                TextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    label = "Search music",
+                    useLabelAsPlaceholder = true,
+                    singleLine = true,
+                    leadingIcon = {
+                        Icon(
+                            imageVector = MiuixIcons.Search,
+                            contentDescription = null,
+                            modifier = Modifier.padding(start = 12.dp).size(20.dp),
+                            tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        )
+                    },
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = { runSearch() }),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                TabRowWithContour(
+                    tabs = PlayerTabs,
+                    selectedTabIndex = tab,
+                    onTabSelected = {
+                        tab = it
+                        submitted = ""
+                    },
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                )
             }
         },
     ) { contentPadding, scrollModifier, scrollBehavior ->
-        if (!connected) {
-            LazyColumn(modifier = scrollModifier, contentPadding = contentPadding) {
-                item(key = "setup") { SpotifySetup() }
-                if (PlayerStore.favorites.isNotEmpty()) {
-                    item(key = "favHeader") { SectionRow("Favorites", null) }
-                    items(PlayerStore.favorites.toList(), key = { "fav-${it.id}" }) { t ->
-                        TrackRow(t) { toast("Connect Spotify to play") }
+        PullToRefresh(
+            isRefreshing = refreshing,
+            onRefresh = {
+                refreshing = true
+                scope.launch {
+                    try {
+                        loadTrending()
+                    } finally {
+                        refreshing = false
                     }
                 }
-            }
-        } else {
-            PullToRefresh(
-                isRefreshing = refreshing,
-                onRefresh = {
-                    refreshing = true
-                    scope.launch {
-                        try {
-                            loadForYou()
-                        } finally {
-                            refreshing = false
+            },
+            pullToRefreshState = pullState,
+            contentPadding = contentPadding,
+            topAppBarScrollBehavior = scrollBehavior,
+        ) {
+            LazyColumn(modifier = scrollModifier, contentPadding = contentPadding) {
+                if (submitted.isNotBlank()) {
+                    item(key = "resultsHeader") {
+                        SectionRow("Results for “$submitted”", "Clear") {
+                            submitted = ""
+                            query = TextFieldValue("")
                         }
                     }
-                },
-                pullToRefreshState = pullState,
-                contentPadding = contentPadding,
-                topAppBarScrollBehavior = scrollBehavior,
-            ) {
-                LazyColumn(modifier = scrollModifier, contentPadding = contentPadding) {
-                    if (submitted.isNotBlank()) {
-                        item(key = "resultsHeader") {
-                            SectionRow("Results for “$submitted”", "Clear") {
-                                submitted = ""
-                                query = TextFieldValue("")
+                    items(results, key = { "res-${it.id}" }) { t -> TrackRow(t) { onTrackTap(t, results) } }
+                    item(key = "resultsFooter") {
+                        Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+                            when {
+                                searching -> InfiniteProgressIndicator()
+                                searchError != null -> Text(searchError ?: "", color = MiuixTheme.colorScheme.error, textAlign = TextAlign.Center)
+                                results.isEmpty() -> Text("No tracks found", color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
                             }
                         }
-                        items(results, key = { "res-${it.id}" }) { t -> TrackRow(t) { onTrackTap(t) } }
-                        item(key = "resultsFooter") {
-                            Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
-                                when {
-                                    searching -> InfiniteProgressIndicator()
-                                    searchError != null -> Text(searchError ?: "", color = MiuixTheme.colorScheme.error, textAlign = TextAlign.Center)
-                                    results.isEmpty() -> Text("No tracks found", color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
-                                }
-                            }
-                        }
-                    } else if (tab == 0) {
-                        items(PlayerState.forYou.toList(), key = { "fy-${it.id}" }) { t -> TrackRow(t) { onTrackTap(t) } }
-                        item(key = "forYouFooter") {
-                            Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
-                                when {
-                                    PlayerState.forYouLoading -> InfiniteProgressIndicator()
-                                    PlayerState.forYouError != null -> Text(
-                                        PlayerState.forYouError ?: "",
-                                        color = MiuixTheme.colorScheme.error,
-                                        textAlign = TextAlign.Center,
-                                    )
-                                    PlayerState.forYou.isEmpty() -> Text(
-                                        "Your most played tracks will show up here",
-                                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                                        textAlign = TextAlign.Center,
-                                    )
-                                }
-                            }
-                        }
-                    } else {
-                        items(PlayerStore.favorites.toList(), key = { "fav-${it.id}" }) { t -> TrackRow(t) { onTrackTap(t) } }
-                        if (PlayerStore.favorites.isEmpty()) {
-                            item(key = "favEmpty") {
-                                Text(
-                                    "Tap the star next to a track to save it here",
+                    }
+                } else if (tab == 0) {
+                    items(forYou, key = { "fy-${it.id}" }) { t -> TrackRow(t) { onTrackTap(t, forYou) } }
+                    item(key = "forYouFooter") {
+                        Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
+                            when {
+                                PlayerState.trendingLoading -> InfiniteProgressIndicator()
+                                PlayerState.trendingError != null -> Text(
+                                    PlayerState.trendingError ?: "",
+                                    color = MiuixTheme.colorScheme.error,
+                                    textAlign = TextAlign.Center,
+                                )
+                                forYou.isEmpty() -> Text(
+                                    "Nothing to play yet. Pull down to refresh.",
                                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                                     textAlign = TextAlign.Center,
-                                    modifier = Modifier.fillMaxWidth().padding(24.dp),
                                 )
                             }
                         }
                     }
+                } else {
+                    val favs = PlayerStore.favorites.toList()
+                    items(favs, key = { "fav-${it.id}" }) { t -> TrackRow(t) { onTrackTap(t, favs) } }
+                    if (favs.isEmpty()) {
+                        item(key = "favEmpty") {
+                            Text(
+                                "Tap the star next to a track to save it here",
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth().padding(24.dp),
+                            )
+                        }
+                    }
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun SpotifySetup() {
-    val context = LocalContext.current
-    val uriHandler = LocalUriHandler.current
-    var id by remember { mutableStateOf(TextFieldValue(Spotify.clientId)) }
-    val summary = MiuixTheme.colorScheme.onSurfaceVariantSummary
-    Card(modifier = Modifier.padding(12.dp)) {
-        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("Connect Spotify", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-            Text(
-                "Your most played tracks and search come from Spotify, and playback is controlled on the Spotify app on this phone " +
-                    "(Spotify Premium required).",
-                color = summary,
-                fontSize = 14.sp,
-            )
-            Text(
-                "1. Create an app at developer.spotify.com/dashboard\n" +
-                    "2. Add this redirect URI: ${Spotify.REDIRECT_URI}\n" +
-                    "3. Under Users and access, add your Spotify account\n" +
-                    "4. Paste the app's Client ID below",
-                fontSize = 13.sp,
-            )
-            TextField(
-                value = id,
-                onValueChange = { id = it },
-                label = "Spotify Client ID",
-                useLabelAsPlaceholder = true,
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Button(
-                onClick = {
-                    Spotify.setClientId(id.text)
-                    Spotify.startLogin(context)
-                },
-                colors = ButtonDefaults.buttonColorsPrimary(),
-                modifier = Modifier.fillMaxWidth(),
-            ) { Text("Connect Spotify", color = MiuixTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold) }
-            Text(
-                "Open Spotify dashboard",
-                color = MiuixTheme.colorScheme.primary,
-                fontSize = 13.sp,
-                modifier = Modifier.clickable { uriHandler.openUri("https://developer.spotify.com/dashboard") }.padding(vertical = 4.dp),
-            )
-            Spotify.authError?.let { Text(it, color = MiuixTheme.colorScheme.error, fontSize = 13.sp) }
         }
     }
 }
@@ -489,18 +407,16 @@ private fun AlbumDisk(url: String, current: Boolean, playing: Boolean, modifier:
 
 // ---------------------------------------------------------------- options (liquid glass)
 
+private val SpeedSteps = listOf(0.75f, 1f, 1.25f, 1.5f, 2f)
+
 @Composable
 private fun PlayerOptions(track: Track) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     val backdrop = rememberLayerBackdrop()
     val art = rememberBitmap(track.image)
     var volume by remember { mutableFloatStateOf(PlayerState.volume) }
-    LaunchedEffect(PlayerState.volume) { volume = PlayerState.volume }
     val playing = PlayerState.isPlaying
     val repeat = PlayerState.repeat
-
-    fun toast(msg: String) = Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+    val speed = PlayerState.speed
 
     Box(
         Modifier
@@ -517,15 +433,7 @@ private fun PlayerOptions(track: Track) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 LiquidGlassButton(
-                    onClick = {
-                        scope.launch {
-                            if (playing) {
-                                PlayerController.run { Spotify.pause() }?.let { toast(it) } ?: run { PlayerState.isPlaying = false }
-                            } else {
-                                PlayerController.play(context, null)?.let { toast(it) }
-                            }
-                        }
-                    },
+                    onClick = { AppPlayer.togglePause() },
                     backdrop = backdrop,
                     modifier = Modifier.weight(1f),
                     height = 44.dp,
@@ -537,9 +445,7 @@ private fun PlayerOptions(track: Track) {
                 LiquidGlassButton(
                     onClick = {
                         val next = RepeatCycle[(RepeatCycle.indexOf(repeat).coerceAtLeast(0) + 1) % RepeatCycle.size]
-                        scope.launch {
-                            PlayerController.run { Spotify.setRepeat(next) }?.let { toast(it) } ?: run { PlayerState.repeat = next }
-                        }
+                        AppPlayer.setRepeat(next)
                     },
                     backdrop = backdrop,
                     modifier = Modifier.weight(1f),
@@ -561,24 +467,21 @@ private fun PlayerOptions(track: Track) {
                     )
                 }
                 LiquidGlassButton(
-                    onClick = { toast("Spotify doesn't support playback speed") },
+                    onClick = {
+                        val i = SpeedSteps.indexOfFirst { it >= speed - 0.001f }.coerceAtLeast(0)
+                        AppPlayer.setSpeed(SpeedSteps[(i + 1) % SpeedSteps.size])
+                    },
                     backdrop = backdrop,
                     modifier = Modifier.weight(1f),
+                    tint = if (speed != 1f) MiuixTheme.colorScheme.primary else Color.Unspecified,
                     height = 44.dp,
                     horizontalPadding = 6.dp,
                 ) {
-                    Icon(imageVector = MiuixIcons.Stopwatch, contentDescription = null, modifier = Modifier.size(18.dp), tint = Color.White.copy(alpha = 0.6f))
-                    Text("Speed", color = Color.White.copy(alpha = 0.6f), fontSize = 12.sp, maxLines = 1, softWrap = false)
+                    Icon(imageVector = MiuixIcons.Stopwatch, contentDescription = null, modifier = Modifier.size(18.dp), tint = Color.White)
+                    Text("${"%.2f".format(speed).trimEnd('0').trimEnd('.')}x", color = Color.White, fontSize = 12.sp, maxLines = 1, softWrap = false)
                 }
                 LiquidGlassButton(
-                    onClick = {
-                        scope.launch {
-                            PlayerController.run {
-                                Spotify.seek(0)
-                                if (!PlayerState.isPlaying) Spotify.play(null)
-                            }?.let { toast(it) } ?: run { PlayerState.isPlaying = true }
-                        }
-                    },
+                    onClick = { AppPlayer.restart() },
                     backdrop = backdrop,
                     modifier = Modifier.weight(1f),
                     height = 44.dp,
@@ -592,12 +495,13 @@ private fun PlayerOptions(track: Track) {
                 Icon(imageVector = MiuixIcons.VolumeOff, contentDescription = null, modifier = Modifier.size(20.dp), tint = Color.White)
                 LiquidGlassSlider(
                     value = { volume },
-                    onValueChange = { volume = it },
+                    onValueChange = {
+                        volume = it
+                        AppPlayer.setVolume(it)
+                    },
                     onValueChangeFinished = { v ->
                         volume = v
-                        scope.launch {
-                            PlayerController.run { Spotify.setVolume(v.roundToInt()) }?.let { toast(it) } ?: run { PlayerState.volume = v }
-                        }
+                        AppPlayer.setVolume(v)
                     },
                     valueRange = 0f..100f,
                     visibilityThreshold = 0.1f,
