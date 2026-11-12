@@ -28,6 +28,10 @@ Some tracks can't be embedded (the owner disabled it); those are skipped automat
 Push to `main` → Actions tab → download APK artifact.
 Toolchain mirrors Miuix: JDK 21, Gradle 9.9.0, AGP 9.5.1, Kotlin 2.4.21, compileSdk 37, Miuix 0.9.4 (sources ported from tag v0.9.4).
 
+**OR**
+
+Get latest Release from the public Releases
+
 ## Features
 - **Log in with pixiv** (OAuth + PKCE through the official web login page, opened in your device browser and returned to the app
   via `pixiv://account/login`), or paste a refresh token. If the official pixiv app is installed it may claim that redirect.
