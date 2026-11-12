@@ -11,6 +11,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.runtime.key
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.animation.core.tween
 import androidx.compose.ui.unit.IntOffset
@@ -76,6 +77,7 @@ import com.repixiv.app.pages.FeedPage
 import com.repixiv.app.pages.ProfilePage
 import com.repixiv.app.pages.SearchPage
 import com.repixiv.app.pages.FollowingPage
+import com.repixiv.app.pages.PlayerPage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.job
@@ -99,7 +101,8 @@ import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Contacts
 import top.yukonga.miuix.kmp.icon.extended.Home
 import top.yukonga.miuix.kmp.icon.extended.Search
-import top.yukonga.miuix.kmp.icon.extended.Community
+import top.yukonga.miuix.kmp.icon.extended.Create
+import top.yukonga.miuix.kmp.icon.extended.Music
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PagerGestureNestedScrollConnection
 import top.yukonga.miuix.kmp.utils.PagerInterceptionMode
@@ -108,8 +111,8 @@ import top.yukonga.miuix.kmp.utils.pagerGestureOverride
 import top.yukonga.miuix.kmp.utils.springAnimateToPage
 
 object UIConstants {
-    val PAGE_TITLES = listOf("Home", "Following", "Search", "Profile")
-    const val PAGE_COUNT = 4
+    val PAGE_TITLES = listOf("Home", "Following", "Search", "Player", "Profile")
+    const val PAGE_COUNT = 5
 }
 
 @Composable
@@ -124,20 +127,30 @@ fun AppContent(padding: PaddingValues) {
     val navigationItems = remember {
         listOf(
             NavigationItem(UIConstants.PAGE_TITLES[0], MiuixIcons.Home),
-            NavigationItem(UIConstants.PAGE_TITLES[1], MiuixIcons.Community),
+            NavigationItem(UIConstants.PAGE_TITLES[1], MiuixIcons.Create),
             NavigationItem(UIConstants.PAGE_TITLES[2], MiuixIcons.Search),
-            NavigationItem(UIConstants.PAGE_TITLES[3], MiuixIcons.Contacts),
+            NavigationItem(UIConstants.PAGE_TITLES[3], MiuixIcons.Music),
+            NavigationItem(UIConstants.PAGE_TITLES[4], MiuixIcons.Contacts),
         )
     }
 
     val nav = remember { Navigator() }
     CompositionLocalProvider(LocalNavigator provides nav) {
         Box(modifier = Modifier.fillMaxSize()) {
-            CompactScreenLayout(
-                navigationItems = navigationItems,
-                padding = padding,
-                mainPagerState = mainPagerState,
-            )
+            // The tabs are not drawn while an opaque screen covers them (state is kept).
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .drawWithContent {
+                        if (!nav.entries.any { !it.closing && it.progress >= 0.999f }) drawContent()
+                    },
+            ) {
+                CompactScreenLayout(
+                    navigationItems = navigationItems,
+                    padding = padding,
+                    mainPagerState = mainPagerState,
+                )
+            }
             OverlayHost(nav)
         }
     }
@@ -183,6 +196,8 @@ private fun OverlayLayer(nav: Navigator, entry: NavEntry, aboveProgress: () -> F
                 translationX = size.width * (1f - progress.value) - size.width * 0.25f * above
                 alpha = (0.4f + 0.6f * progress.value) * (1f - 0.5f * above)
             }
+            // A fully covered screen keeps its state but is not drawn, so stacked screens don't add GPU cost.
+            .drawWithContent { if (aboveProgress() < 0.999f) drawContent() }
             .background(MiuixTheme.colorScheme.surface)
             .pointerInput(Unit) { detectTapGestures { } },
     ) {
@@ -327,7 +342,7 @@ private fun AppNavigationBar(
                         FloatingBottomBarItem(
                             selected = page == index,
                             onClick = { activateTab(index) },
-                            modifier = Modifier.defaultMinSize(minWidth = 76.dp),
+                            modifier = Modifier.defaultMinSize(minWidth = if (navigationItems.size >= 5) 62.dp else 76.dp),
                         ) {
                             val contentColor = LocalContentColor.current
                             Box {
@@ -373,7 +388,7 @@ private fun FloatingNavigationBarAlignment.toAlignment(): Alignment.Horizontal =
 private fun navigationItemBadge(index: Int, show: Boolean): (@Composable () -> Unit)? = when {
     !show -> null
     index == 1 -> ({ Badge { Text("8") } })
-    index == 3 -> ({ Badge() })
+    index == 4 -> ({ Badge() })
     else -> null
 }
 
@@ -413,6 +428,7 @@ fun AppPager(
                 0 -> FeedPage(padding = padding)
                 1 -> FollowingPage(padding = padding)
                 2 -> SearchPage(padding = padding)
+                3 -> PlayerPage(padding = padding)
                 else -> ProfilePage(padding = padding)
             }
         },

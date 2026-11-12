@@ -64,6 +64,7 @@ private val PagerGestureModeOptions = listOf("Default", "Cross-Axis", "iOS-like"
 
 private const val MIUIX_URL = "https://github.com/compose-miuix-ui/miuix"
 private const val BAKASU_URL = "https://github.com/Baka-SU/BakaSU"
+private const val LIQUID_GLASS_URL = "https://github.com/Kyant0/AndroidLiquidGlass"
 
 /** The app-wide settings, shown as the "RePixIV settings" category inside Settings. */
 internal fun LazyListScope.repixivSettingsItems() {
@@ -206,6 +207,11 @@ internal fun LazyListScope.repixivSettingsItems() {
                 title = "UI design credits",
                 summary = "Design & components by Miuix (compose-miuix-ui), Apache-2.0",
                 onClick = { uriHandler.openUri(MIUIX_URL) },
+            )
+            ArrowPreference(
+                title = "Player controls credits",
+                summary = "Liquid-glass controls from Kyant's AndroidLiquidGlass (Apache-2.0)",
+                onClick = { uriHandler.openUri(LIQUID_GLASS_URL) },
             )
             ArrowPreference(
                 title = "Floating bar credits",

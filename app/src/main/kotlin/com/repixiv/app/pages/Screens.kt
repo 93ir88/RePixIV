@@ -72,6 +72,8 @@ import com.repixiv.app.Screen
 import com.repixiv.app.pixiv.Downloader
 import com.repixiv.app.pixiv.FeedState
 import com.repixiv.app.pixiv.Filters
+import com.repixiv.app.player.PlayerState
+import com.repixiv.app.player.Spotify
 import com.repixiv.app.pixiv.Illust
 import com.repixiv.app.pixiv.Pixiv
 import com.repixiv.app.pixiv.UserDetail
@@ -516,6 +518,18 @@ fun AccountSettingsScreen() {
                                 Toast.makeText(context, "Filters reset", Toast.LENGTH_SHORT).show()
                             },
                         )
+                        if (Spotify.connected) {
+                            ArrowPreference(
+                                title = "Disconnect Spotify",
+                                summary = "Stops syncing your Player tab with Spotify",
+                                onClick = {
+                                    Spotify.disconnect()
+                                    PlayerState.current = null
+                                    PlayerState.forYou.clear()
+                                    Toast.makeText(context, "Spotify disconnected", Toast.LENGTH_SHORT).show()
+                                },
+                            )
+                        }
                     }
                 }
             }

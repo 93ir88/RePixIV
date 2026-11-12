@@ -7,3 +7,7 @@ The floating bottom bar (app/src/main/kotlin/com/repixiv/app/ui/bakasu/) is deri
 (https://github.com/Baka-SU/BakaSU), licensed under the GNU General Public License v3.0 (see LICENSE-bakasu).
 BakaSU adapted it from the Miuix example app (Apache-2.0) which is based on Kyant0/AndroidLiquidGlass
 (https://github.com/Kyant0/AndroidLiquidGlass, Apache-2.0).
+
+The Player tab's glass controls (app/src/main/kotlin/com/repixiv/app/ui/bakasu/LiquidGlassControls.kt) are adapted from
+the AndroidLiquidGlass catalog by Kyant (https://github.com/Kyant0/AndroidLiquidGlass), licensed under the
+Apache License 2.0 (see LICENSE-androidliquidglass).

@@ -45,6 +45,7 @@ class InteractiveHighlight(
 
     private var startPosition = Offset.Zero
     val offset: Offset get() = positionAnimation.value - startPosition
+    val pressProgress: Float get() = pressProgressAnimation.value
 
     @Language("AGSL")
     private val shaderSource =

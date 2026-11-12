@@ -1,6 +1,18 @@
 package com.repixiv.app.util
 
+import android.graphics.Bitmap
+import android.graphics.drawable.Drawable
 import android.widget.ImageView
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
+import com.bumptech.glide.request.target.CustomTarget
+import com.bumptech.glide.request.transition.Transition
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
@@ -51,7 +63,7 @@ fun Illust.fullUrl(page: Int, cap: Int): String =
     if (cap == 0) originalUrls.getOrElse(page) { largeUrls.getOrElse(page) { imageUrl } } else pageUrl(page, cap)
 
 @Composable
-fun RemoteImage(url: String, circle: Boolean, modifier: Modifier, crop: Boolean = true) {
+fun RemoteImage(url: String, circle: Boolean, modifier: Modifier, crop: Boolean = true, plain: Boolean = false) {
     val cap = lowResCap(LocalAppState.current.lowRes)
     AndroidView(
         modifier = modifier,
@@ -59,7 +71,7 @@ fun RemoteImage(url: String, circle: Boolean, modifier: Modifier, crop: Boolean 
         update = { view ->
             if (url.isNotBlank()) {
                 view.scaleType = if (crop || circle) ImageView.ScaleType.CENTER_CROP else ImageView.ScaleType.FIT_CENTER
-                val base = Glide.with(view).load(pixivGlideUrl(url))
+                val base = if (plain) Glide.with(view).load(url) else Glide.with(view).load(pixivGlideUrl(url))
                 val req = if (cap > 0 && !circle) base.override(cap, cap) else base
                 when {
                     circle -> req.circleCrop()
@@ -69,4 +81,23 @@ fun RemoteImage(url: String, circle: Boolean, modifier: Modifier, crop: Boolean 
             }
         },
     )
+}
+
+/** Loads [url] into a Compose bitmap (used for album art that needs custom drawing). */
+@Composable
+fun rememberBitmap(url: String, size: Int = 320): ImageBitmap? {
+    val context = LocalContext.current
+    var bmp by remember(url) { mutableStateOf<ImageBitmap?>(null) }
+    DisposableEffect(url) {
+        val target = object : CustomTarget<Bitmap>(size, size) {
+            override fun onResourceReady(resource: Bitmap, transition: Transition<in Bitmap>?) {
+                bmp = resource.asImageBitmap()
+            }
+
+            override fun onLoadCleared(placeholder: Drawable?) {}
+        }
+        if (url.isNotBlank()) Glide.with(context).asBitmap().load(url).into(target)
+        onDispose { Glide.with(context).clear(target) }
+    }
+    return bmp
 }

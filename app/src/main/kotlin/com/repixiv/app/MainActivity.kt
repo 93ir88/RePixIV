@@ -21,6 +21,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.unit.dp
+import com.repixiv.app.player.PlayerStore
+import com.repixiv.app.player.Spotify
 import com.repixiv.app.pixiv.Filters
 import com.repixiv.app.pixiv.LocalLists
 import com.repixiv.app.pixiv.Pixiv
@@ -29,11 +31,20 @@ import com.repixiv.app.ui.keyColorFor
 import top.yukonga.miuix.kmp.squircle.LocalSquircleEnabled
 
 class MainActivity : ComponentActivity() {
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        intent.data?.let { Spotify.handleRedirect(it) }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Pixiv.init(applicationContext)
         Filters.init(applicationContext)
         LocalLists.init(applicationContext)
+        Spotify.init(applicationContext)
+        PlayerStore.init(applicationContext)
+        intent?.data?.let { Spotify.handleRedirect(it) }
 
         setContent {
             var appState by remember { mutableStateOf(AppStateStore.load(this@MainActivity)) }

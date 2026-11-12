@@ -13,6 +13,14 @@ example app and Kyant0's [AndroidLiquidGlass](https://github.com/Kyant0/AndroidL
 Because it is GPL-3.0 code, distributing RePixIV with it means following the GPL-3.0 terms
 (for example, offering the source of your build).
 
+## Player (Spotify)
+The Player tab shows your most played Spotify tracks ("For You"), search, and starred "Favorites" (saved on-device).
+Tap a track to play it (the Spotify app on this phone does the playing, Spotify Premium required); tap it again for
+the glass control panel (stop, repeat, restart, volume). Setup: create an app at developer.spotify.com/dashboard,
+add the redirect URI `repixiv://spotify-callback`, add your account under Users and access, and paste the Client ID.
+Controls use the official Spotify Web API. Glass controls are adapted from Kyant's
+[AndroidLiquidGlass](https://github.com/Kyant0/AndroidLiquidGlass) (Apache-2.0).
+
 ## Build
 Push to `main` → Actions tab → download APK artifact.
 Toolchain mirrors Miuix: JDK 21, Gradle 9.9.0, AGP 9.5.1, Kotlin 2.4.21, compileSdk 37, Miuix 0.9.4 (sources ported from tag v0.9.4).
