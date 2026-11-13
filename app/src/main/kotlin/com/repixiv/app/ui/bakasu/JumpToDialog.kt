@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.repixiv.app.player.AppPlayer
 import com.repixiv.app.player.PlayerState
+import com.repixiv.app.ui.LocalColorMode
 import com.repixiv.app.ui.bakasu.liquid.lens
 import com.repixiv.app.ui.bakasu.liquid.vibrancy
 import top.yukonga.miuix.kmp.basic.Text
@@ -58,7 +59,7 @@ import top.yukonga.miuix.kmp.blur.isRuntimeShaderSupported
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import kotlin.math.roundToInt
 
-private val Accent = Color(0xFF0091FF)
+private val DefaultAccent = Color(0xFF0091FF)
 
 private fun fmt(totalSec: Int): String = "%d:%02d".format(totalSec / 60, totalSec % 60)
 
@@ -82,6 +83,8 @@ fun JumpToDialog(backdrop: Backdrop) {
     val containerColor = if (dark) Color(0xFF121212).copy(0.4f) else Color(0xFFFAFAFA).copy(0.6f)
     val dimColor = if (dark) Color(0xFF121212).copy(0.56f) else Color(0xFF29293A).copy(0.23f)
     val glass = isRuntimeShaderSupported()
+    // Monet modes (3..5) use the theme's own color, everything else keeps the default blue
+    val accent = if (LocalColorMode.current in 3..5) MiuixTheme.colorScheme.primary else DefaultAccent
 
     // the sheet's state starts from where the song is now each time it opens
     val startSec = remember(track?.id) { PlayerState.positionSec.toInt() }
@@ -195,6 +198,7 @@ fun JumpToDialog(backdrop: Backdrop) {
                         value = minText,
                         placeholder = "min",
                         color = contentColor,
+                        accent = accent,
                         modifier = Modifier.weight(1f),
                         onChange = {
                             minText = it
@@ -207,6 +211,7 @@ fun JumpToDialog(backdrop: Backdrop) {
                         value = secText,
                         placeholder = "sec",
                         color = contentColor,
+                        accent = accent,
                         modifier = Modifier.weight(1f),
                         onChange = {
                             secText = it
@@ -218,7 +223,7 @@ fun JumpToDialog(backdrop: Backdrop) {
                         onClick = { jump() },
                         backdrop = backdrop,
                         modifier = Modifier.weight(1.2f),
-                        tint = Accent,
+                        tint = accent,
                         height = 48.dp,
                         horizontalPadding = 12.dp,
                     ) {
@@ -252,9 +257,11 @@ fun JumpToDialog(backdrop: Backdrop) {
                     onClick = close,
                     backdrop = backdrop,
                     modifier = Modifier.padding(24.dp, 16.dp, 24.dp, 24.dp).fillMaxWidth(),
+                    tint = accent,
                     height = 48.dp,
+                    horizontalPadding = 12.dp,
                 ) {
-                    Text("Close", color = contentColor, fontSize = 16.sp)
+                    Text("Close", color = Color.White, fontSize = 16.sp, maxLines = 1, softWrap = false)
                 }
             }
         }
@@ -266,6 +273,7 @@ private fun TimeBox(
     value: String,
     placeholder: String,
     color: Color,
+    accent: Color,
     modifier: Modifier,
     onChange: (String) -> Unit,
     onDone: () -> Unit,
@@ -275,7 +283,7 @@ private fun TimeBox(
         onValueChange = { s -> onChange(s.filter { it.isDigit() }.take(3)) },
         singleLine = true,
         textStyle = TextStyle(color = color, fontSize = 16.sp, textAlign = TextAlign.Center),
-        cursorBrush = SolidColor(Accent),
+        cursorBrush = SolidColor(accent),
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
         keyboardActions = KeyboardActions(onDone = { onDone() }),
         modifier = modifier,
