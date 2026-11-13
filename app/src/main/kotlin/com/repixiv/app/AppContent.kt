@@ -92,6 +92,7 @@ import top.yukonga.miuix.kmp.basic.NavigationBarDisplayMode
 import top.yukonga.miuix.kmp.basic.NavigationBarItem
 import top.yukonga.miuix.kmp.basic.NavigationItem
 import top.yukonga.miuix.kmp.basic.Scaffold
+import com.repixiv.app.ui.bakasu.JumpToDialog
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.blur.BlendColorEntry
 import top.yukonga.miuix.kmp.blur.BlurDefaults
@@ -226,6 +227,7 @@ private fun CompactScreenLayout(
         drawRect(surfaceColor)
         drawContent()
     }
+    Box(Modifier.fillMaxSize()) {
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         bottomBar = {
@@ -250,6 +252,8 @@ private fun CompactScreenLayout(
                     .imePadding(),
             )
         }
+    }
+    JumpToDialog(backdrop)
     }
 }
 

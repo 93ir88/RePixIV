@@ -88,6 +88,10 @@ object PlayerState {
     var speed by mutableFloatStateOf(1f)
     var volume by mutableFloatStateOf(80f)
     var optionsOpen by mutableStateOf(false)
+    /** Playback position and track length in seconds (0 when unknown); updated twice a second by the player. */
+    var positionSec by mutableFloatStateOf(0f)
+    var durationSec by mutableFloatStateOf(0f)
+    var jumpDialogOpen by mutableStateOf(false)
     val trending = mutableStateListOf<Track>()
     /** Most played tracks shown at the top of "For You"; fixed until the feed is refreshed so rows don't jump around. */
     var forYouHead by mutableStateOf<List<Track>>(emptyList())

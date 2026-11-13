@@ -673,14 +673,14 @@ private fun PlayerOptions(track: Track) {
                     Text("${"%.2f".format(speed).trimEnd('0').trimEnd('.')}x", color = Color.White, fontSize = 12.sp, maxLines = 1, softWrap = false)
                 }
                 LiquidGlassButton(
-                    onClick = { AppPlayer.restart() },
+                    onClick = { PlayerState.jumpDialogOpen = true },
                     backdrop = backdrop,
                     modifier = Modifier.weight(1f),
                     height = 44.dp,
                     horizontalPadding = 6.dp,
                 ) {
                     Icon(imageVector = MiuixIcons.RotateLeft, contentDescription = null, modifier = Modifier.size(18.dp), tint = Color.White)
-                    Text("Restart", color = Color.White, fontSize = 12.sp, maxLines = 1, softWrap = false)
+                    Text("Jump to", color = Color.White, fontSize = 12.sp, maxLines = 1, softWrap = false)
                 }
             }
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {

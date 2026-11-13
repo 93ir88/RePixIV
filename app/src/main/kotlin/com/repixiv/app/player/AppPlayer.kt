@@ -49,6 +49,10 @@ object AppPlayer {
         function play(){player.playVideo();}
         function pause(){player.pauseVideo();}
         function seek0(){player.seekTo(0,true);player.playVideo();}
+        function seek(s){player.seekTo(s,true);player.playVideo();}
+        setInterval(function(){
+          if(player&&player.getCurrentTime&&player.getDuration){Native.onTime(player.getCurrentTime()||0,player.getDuration()||0);}
+        },500);
         function vol(v){player.setVolume(v);}
         function rate(r){player.setPlaybackRate(r);}
         </script></body></html>
@@ -84,6 +88,8 @@ object AppPlayer {
         PlayerState.current = track
         PlayerState.loading = true
         PlayerState.isPlaying = false
+        PlayerState.positionSec = 0f
+        PlayerState.durationSec = 0f
         if (ready) js("load('${track.id}',${PlayerState.volume.toInt()})") else pendingId = track.id
     }
 
@@ -99,6 +105,14 @@ object AppPlayer {
 
     fun restart() {
         if (ready && PlayerState.current != null) js("seek0()")
+    }
+
+    /** Jumps to [sec] seconds into the current track and keeps playing. */
+    fun seekTo(sec: Float) {
+        if (!ready || PlayerState.current == null) return
+        val s = sec.toInt().coerceAtLeast(0)
+        PlayerState.positionSec = s.toFloat()
+        js("seek($s)")
     }
 
     /** [mode] is "off", "context" (repeat all) or "track" (repeat one). */
@@ -123,6 +137,9 @@ object AppPlayer {
         PlayerState.isPlaying = false
         PlayerState.loading = false
         PlayerState.optionsOpen = false
+        PlayerState.jumpDialogOpen = false
+        PlayerState.positionSec = 0f
+        PlayerState.durationSec = 0f
     }
 
     private fun js(code: String) {
@@ -144,6 +161,14 @@ object AppPlayer {
         @JavascriptInterface
         fun onState(state: Int) {
             main.post { handleState(state) }
+        }
+
+        @JavascriptInterface
+        fun onTime(position: Double, duration: Double) {
+            main.post {
+                PlayerState.positionSec = position.toFloat()
+                PlayerState.durationSec = duration.toFloat()
+            }
         }
 
         @JavascriptInterface
