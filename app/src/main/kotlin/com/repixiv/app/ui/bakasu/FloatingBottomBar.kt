@@ -253,6 +253,8 @@ fun FloatingBottomBar(
     var currentIndex by remember { mutableIntStateOf(selectedIndex) }
     val onSelectedUpdated by rememberUpdatedState(onSelected)
     val onReselectedUpdated by rememberUpdatedState(onReselected)
+    // true once the finger actually moved, so a plain tap on the current tab can be told apart from a drag
+    val dragged = remember { booleanArrayOf(false) }
 
     fun indexAt(positionX: Float): Int {
         if (tabWidthPx == 0f) return currentIndex
@@ -275,6 +277,7 @@ fun FloatingBottomBar(
                 offset.x in 0f..totalWidthPx
             },
             onDragStarted = { position ->
+                dragged[0] = false
                 updateValue(indexAt(position.x).toFloat())
             },
             onDragStopped = {
@@ -282,6 +285,9 @@ fun FloatingBottomBar(
                 if (currentIndex != targetIndex) {
                     currentIndex = targetIndex
                     onSelectedUpdated(targetIndex)
+                } else if (!dragged[0]) {
+                    // tapped the tab that's already selected
+                    onReselectedUpdated()
                 }
                 updateValue(targetIndex.toFloat())
                 animationScope.launch {
@@ -295,6 +301,7 @@ fun FloatingBottomBar(
                 }
             },
             onDrag = { _, dragAmount ->
+                if (dragAmount.x != 0f) dragged[0] = true
                 if (tabWidthPx > 0f && dragAmount.x != 0f) {
                     updateValue(
                         (targetValue + dragAmount.x / tabWidthPx * if (isLtr) 1f else -1f)

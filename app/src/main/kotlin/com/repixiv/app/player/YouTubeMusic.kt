@@ -35,8 +35,8 @@ object YouTubeMusic {
     /** True when the track's title or artist is written in Arabic script. */
     fun isArabic(t: Track): Boolean = ARABIC.containsMatchIn(t.title) || ARABIC.containsMatchIn(t.artist)
 
-    /** Region whose music chart worked on the first page; later pages must use the same one. */
-    private var chartRegion: String? = null
+    private var regionQueue: List<String> = emptyList()
+    private var regionIdx = 0
 
     /** Music chart regions that aren't Arabic-speaking. */
     private val RegionPool = listOf("US", "GB", "CA", "AU", "DE", "FR", "BR", "MX", "KR", "JP", "IN", "ES", "IT", "SE", "NL")
@@ -58,16 +58,31 @@ object YouTubeMusic {
     /** Next page of the popular-music chart. */
     suspend fun morePopular(token: String): TrackPage = withContext(Dispatchers.IO) { popular(token) }
 
+    private const val REGION_PREFIX = "region:"
+
+    /**
+     * Pages through the music charts of several regions one after another, so the feed doesn't end when one
+     * chart does. A page token of the form "region:XX" means "start the chart of region XX".
+     */
     private fun popular(token: String?): TrackPage {
-        val regions = if (token != null && chartRegion != null) {
-            listOf(chartRegion!!)
-        } else {
-            // Always use a non-Arabic-speaking chart (not the device region), so the feed isn't Arabic by default.
-            // a different chart each refresh, so the feed isn't the same songs every time
-            RegionPool.shuffled()
+        if (token == null) {
+            regionQueue = RegionPool.shuffled()
+            regionIdx = 0
         }
-        val page = if (token != null) "&pageToken=${enc(token)}" else ""
-        for (r in regions) {
+        var pageToken: String? = null
+        if (token != null) {
+            if (token.startsWith(REGION_PREFIX)) {
+                val idx = regionQueue.indexOf(token.removePrefix(REGION_PREFIX))
+                if (idx < 0) return TrackPage(emptyList(), null)
+                regionIdx = idx
+            } else {
+                pageToken = token
+            }
+        }
+        var lastError: Throwable? = null
+        while (regionIdx < regionQueue.size) {
+            val r = regionQueue[regionIdx]
+            val page = if (pageToken != null) "&pageToken=${enc(pageToken)}" else ""
             val res = runCatching {
                 parse(
                     get("$API/videos?part=snippet,status&chart=mostPopular&videoCategoryId=$MUSIC_CATEGORY&maxResults=50&regionCode=$r$page"),
@@ -75,12 +90,25 @@ object YouTubeMusic {
                     hideArabic = true,
                 )
             }
-            res.getOrNull()?.takeIf { it.tracks.isNotEmpty() }?.let {
-                chartRegion = r
-                return it
+            val p = res.getOrNull()
+            if (p == null) {
+                lastError = res.exceptionOrNull()
+                // a failed later page keeps its token so Retry works; a region without a chart is skipped
+                if (pageToken != null) throw lastError!!
+                regionIdx++
+                continue
             }
-            if (r == regions.last()) res.exceptionOrNull()?.let { throw it }
+            if (p.next != null) return p
+            // this region's chart is finished: continue with the next region's chart
+            regionIdx++
+            val nextToken = regionQueue.getOrNull(regionIdx)?.let { REGION_PREFIX + it }
+            if (p.tracks.isEmpty() && nextToken != null) {
+                pageToken = null
+                continue
+            }
+            return TrackPage(p.tracks, nextToken)
         }
+        if (lastError != null && token == null) throw lastError
         return TrackPage(emptyList(), null)
     }
 
