@@ -44,8 +44,8 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -70,6 +70,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.repixiv.app.TabReselect
+import com.repixiv.app.util.scrollToTopFast
 import com.repixiv.app.player.PlayerController
 import com.repixiv.app.player.PlayerState
 import com.repixiv.app.player.PlayerStore
@@ -84,7 +86,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
@@ -94,6 +95,7 @@ import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
 import top.yukonga.miuix.kmp.basic.PullToRefresh
 import top.yukonga.miuix.kmp.basic.TabRowWithContour
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.basic.rememberPullToRefreshState
 import top.yukonga.miuix.kmp.blur.layerBackdrop
@@ -150,7 +152,11 @@ fun PlayerPage(padding: PaddingValues) {
     var refreshing by remember { mutableStateOf(false) }
     var searchNext by remember { mutableStateOf<String?>(null) }
     var loadingMore by remember { mutableStateOf(false) }
-    val listState = rememberLazyListState()
+    var moreError by remember { mutableStateOf<String?>(null) }
+    // one scroll state per list, so switching tabs / searching doesn't mix up scroll positions
+    val forYouListState = rememberLazyListState()
+    val favListState = rememberLazyListState()
+    val searchListState = rememberLazyListState()
     val pullState = rememberPullToRefreshState()
 
     fun toast(msg: String) = Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
@@ -159,6 +165,7 @@ fun PlayerPage(padding: PaddingValues) {
         PlayerState.trendingLoading = true
         try {
             val t = YouTubeMusic.forYou()
+            PlayerState.forYouHead = PlayerStore.mostPlayed(30).filterNot { YouTubeMusic.isArabic(it) }.shuffled()
             PlayerState.trending.clear()
             PlayerState.trending.addAll(t.tracks)
             PlayerState.trendingNext = t.next
@@ -182,6 +189,7 @@ fun PlayerPage(padding: PaddingValues) {
         submitted = q
         searching = true
         searchError = null
+        moreError = null
         searchNext = null
         focusManager.clearFocus()
         keyboard?.hide()
@@ -200,22 +208,27 @@ fun PlayerPage(padding: PaddingValues) {
         }
     }
 
-    /** Loads the next page of the feed or of the current search when the list end is reached. */
+    /** Loads the next page of the feed or of the current search; called when the list footer comes into view. */
     suspend fun loadMore() {
         if (loadingMore || !GoogleAuth.signedIn) return
         val inSearch = submitted.isNotBlank()
-        var token = (if (inSearch) searchNext else if (tab == 0) PlayerState.trendingNext else null) ?: return
-        val query = submitted
+        if (!inSearch && PlayerState.trendingLoading) return
+        val q = submitted
+        var token = (if (inSearch) searchNext else PlayerState.trendingNext) ?: return
         loadingMore = true
+        moreError = null
         try {
-            // a page can come back empty after filtering (non-embeddable tracks), so try a few
+            // a page can come back empty after filtering (non-embeddable / Arabic tracks), so try a few
             var tries = 0
             while (tries < 3) {
-                val p = if (inSearch) YouTubeMusic.search(query, token) else YouTubeMusic.morePopular(token)
+                val p = if (inSearch) YouTubeMusic.search(q, token) else YouTubeMusic.morePopular(token)
+                // drop the page if the search changed or the feed was refreshed in the meantime
                 if (inSearch) {
+                    if (submitted != q || searchNext != token) return
                     results = (results + p.tracks).distinctBy { it.id }
                     searchNext = p.next
                 } else {
+                    if (PlayerState.trendingNext != token) return
                     val known = PlayerState.trending.map { it.id }.toSet()
                     PlayerState.trending.addAll(p.tracks.filter { it.id !in known })
                     PlayerState.trendingNext = p.next
@@ -227,24 +240,47 @@ fun PlayerPage(padding: PaddingValues) {
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            // stop auto-loading after a failure so it doesn't loop; pull to refresh to retry
-            if (inSearch) searchNext = null else PlayerState.trendingNext = null
-            toast(e.message ?: "Couldn't load more")
+            // stop auto-loading until the user taps Retry
+            moreError = e.message ?: "Couldn't load more"
         } finally {
             loadingMore = false
         }
     }
 
-    LaunchedEffect(listState) {
-        snapshotFlow {
-            val info = listState.layoutInfo
-            val last = info.visibleItemsInfo.lastOrNull()?.index ?: 0
-            listOf(info.totalItemsCount > 0 && last >= info.totalItemsCount - 5, tab, submitted, PlayerState.trendingNext, searchNext)
-        }.distinctUntilChanged().collect { if (it[0] == true) loadMore() }
+    fun refreshFeed() {
+        if (refreshing) return
+        refreshing = true
+        moreError = null
+        scope.launch {
+            if (!GoogleAuth.signedIn) {
+                refreshing = false
+                return@launch
+            }
+            try {
+                loadTrending()
+            } finally {
+                refreshing = false
+            }
+        }
     }
 
+    // tapping the Player icon while on Player: jump to the top, and load a fresh set of songs unless searching
+    val onReselect by rememberUpdatedState<() -> Unit> {
+        scope.launch {
+            when {
+                submitted.isNotBlank() -> searchListState.scrollToTopFast()
+                tab == 0 -> forYouListState.scrollToTopFast()
+                else -> favListState.scrollToTopFast()
+            }
+        }
+        if (submitted.isBlank() && tab == 0) refreshFeed()
+    }
+    LaunchedEffect(refreshing) { TabReselect.setRefreshing(3, refreshing) }
+    LaunchedEffect(Unit) { TabReselect.events.collect { if (it == 3) onReselect() } }
+
     // "For You": what you play most, then trending tracks to fill it up
-    val forYou = (PlayerStore.mostPlayed(30) + PlayerState.trending).distinctBy { it.id }
+    // (the most-played head is fixed until refresh, so playing a song doesn't reorder the list under you)
+    val forYou = (PlayerState.forYouHead + PlayerState.trending).distinctBy { it.id }
 
     fun onTrackTap(t: Track, list: List<Track>) {
         if (PlayerState.current?.id == t.id) {
@@ -255,6 +291,11 @@ fun PlayerPage(padding: PaddingValues) {
         scope.launch { PlayerController.play(context, t, list)?.let { toast(it) } }
     }
 
+    LaunchedEffect(Unit) {
+        if (PlayerState.forYouHead.isEmpty()) {
+            PlayerState.forYouHead = PlayerStore.mostPlayed(30).filterNot { YouTubeMusic.isArabic(it) }
+        }
+    }
     LaunchedEffect(GoogleAuth.signedIn) {
         if (GoogleAuth.signedIn) {
             if (PlayerState.trending.isEmpty()) loadTrending()
@@ -308,25 +349,17 @@ fun PlayerPage(padding: PaddingValues) {
     ) { contentPadding, scrollModifier, scrollBehavior ->
         PullToRefresh(
             isRefreshing = refreshing,
-            onRefresh = {
-                refreshing = true
-                scope.launch {
-                    if (!GoogleAuth.signedIn) {
-                        refreshing = false
-                        return@launch
-                    }
-                    try {
-                        loadTrending()
-                    } finally {
-                        refreshing = false
-                    }
-                }
-            },
+            onRefresh = { refreshFeed() },
             pullToRefreshState = pullState,
             contentPadding = contentPadding,
             topAppBarScrollBehavior = scrollBehavior,
         ) {
-            LazyColumn(modifier = scrollModifier, contentPadding = contentPadding, state = listState) {
+            val activeListState = when {
+                submitted.isNotBlank() -> searchListState
+                tab == 0 -> forYouListState
+                else -> favListState
+            }
+            LazyColumn(modifier = scrollModifier, contentPadding = contentPadding, state = activeListState) {
                 if (submitted.isNotBlank()) {
                     item(key = "resultsHeader") {
                         SectionRow("Results for “$submitted”", "Clear") {
@@ -336,13 +369,15 @@ fun PlayerPage(padding: PaddingValues) {
                     }
                     items(results, key = { "res-${it.id}" }) { t -> TrackRow(t) { onTrackTap(t, results) } }
                     item(key = "resultsFooter") {
-                        Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
-                            when {
-                                searching || loadingMore -> InfiniteProgressIndicator()
-                                searchError != null -> Text(searchError ?: "", color = MiuixTheme.colorScheme.error, textAlign = TextAlign.Center)
-                                results.isEmpty() -> Text("No tracks found", color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
-                            }
-                        }
+                        MusicFooter(
+                            busy = searching || loadingMore,
+                            error = searchError ?: moreError,
+                            hasNext = searchNext != null && !searching,
+                            nextKey = searchNext,
+                            emptyText = if (results.isEmpty()) "No tracks found" else null,
+                            onLoadMore = { loadMore() },
+                            onRetry = { if (searchError != null) runSearch() else moreError = null },
+                        )
                     }
                 } else if (tab == 0) {
                     if (!GoogleAuth.signedIn) {
@@ -359,21 +394,23 @@ fun PlayerPage(padding: PaddingValues) {
                     }
                     items(forYou, key = { "fy-${it.id}" }) { t -> TrackRow(t) { onTrackTap(t, forYou) } }
                     item(key = "forYouFooter") {
-                        Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) {
-                            when {
-                                PlayerState.trendingLoading || loadingMore -> InfiniteProgressIndicator()
-                                PlayerState.trendingError != null -> Text(
-                                    PlayerState.trendingError ?: "",
-                                    color = MiuixTheme.colorScheme.error,
-                                    textAlign = TextAlign.Center,
-                                )
-                                GoogleAuth.signedIn && forYou.isEmpty() -> Text(
-                                    "Nothing to play yet. Pull down to refresh.",
-                                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                                    textAlign = TextAlign.Center,
-                                )
-                            }
-                        }
+                        MusicFooter(
+                            busy = PlayerState.trendingLoading || loadingMore,
+                            error = PlayerState.trendingError ?: moreError,
+                            hasNext = GoogleAuth.signedIn && PlayerState.trendingNext != null,
+                            // also re-fires after a refresh finishes
+                            nextKey = Pair(PlayerState.trendingNext, PlayerState.trendingLoading),
+                            emptyText = if (GoogleAuth.signedIn && forYou.isEmpty() && !PlayerState.trendingLoading) {
+                                "Nothing to play yet. Pull down to refresh."
+                            } else {
+                                null
+                            },
+                            onLoadMore = { loadMore() },
+                            onRetry = {
+                                moreError = null
+                                if (PlayerState.trendingError != null) scope.launch { loadTrending() }
+                            },
+                        )
                     }
                 } else {
                     val favs = PlayerStore.favorites.toList()
@@ -390,6 +427,32 @@ fun PlayerPage(padding: PaddingValues) {
                     }
                 }
             }
+        }
+    }
+}
+
+/** List footer: loads the next page as soon as it scrolls into view (same approach as the home feeds). */
+@Composable
+private fun MusicFooter(
+    busy: Boolean,
+    error: String?,
+    hasNext: Boolean,
+    nextKey: Any?,
+    emptyText: String?,
+    onLoadMore: suspend () -> Unit,
+    onRetry: () -> Unit,
+) {
+    if (hasNext && error == null) {
+        LaunchedEffect(nextKey) { onLoadMore() }
+    }
+    Box(Modifier.fillMaxWidth().padding(20.dp), contentAlignment = Alignment.Center) {
+        when {
+            busy -> InfiniteProgressIndicator()
+            error != null -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(error, color = MiuixTheme.colorScheme.error, textAlign = TextAlign.Center)
+                TextButton(text = "Retry", onClick = onRetry)
+            }
+            emptyText != null -> Text(emptyText, color = MiuixTheme.colorScheme.onSurfaceVariantSummary, textAlign = TextAlign.Center)
         }
     }
 }

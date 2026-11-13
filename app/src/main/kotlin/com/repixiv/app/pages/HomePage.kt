@@ -39,6 +39,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -51,6 +52,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.repixiv.app.LocalNavigator
 import com.repixiv.app.Screen
+import com.repixiv.app.TabReselect
+import com.repixiv.app.util.scrollToTopFast
 import com.repixiv.app.pixiv.FeedState
 import com.repixiv.app.pixiv.Illust
 import com.repixiv.app.pixiv.Pixiv
@@ -127,6 +130,16 @@ fun FeedPage(padding: PaddingValues) {
     }
 
     val nav = LocalNavigator.current
+
+    // tapping the Home icon while on Home: jump to the top and refresh
+    val onReselect by rememberUpdatedState<() -> Unit> {
+        if (session != null && !refreshing) {
+            scope.launch { listStates[tab].scrollToTopFast() }
+            refreshCurrent()
+        }
+    }
+    LaunchedEffect(refreshing) { TabReselect.setRefreshing(0, refreshing) }
+    LaunchedEffect(Unit) { TabReselect.events.collect { if (it == 0) onReselect() } }
 
     PageScaffold(
         title = "Home",

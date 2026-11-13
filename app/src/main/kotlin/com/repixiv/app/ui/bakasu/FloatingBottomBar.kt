@@ -215,6 +215,7 @@ fun FloatingBottomBar(
     modifier: Modifier = Modifier,
     selectedIndex: Int,
     onSelected: (index: Int) -> Unit,
+    onReselected: () -> Unit = {},
     tabsCount: Int,
     blurBackdrop: Backdrop? = null,
     content: @Composable RowScope.((Int) -> Unit) -> Unit,
@@ -251,6 +252,7 @@ fun FloatingBottomBar(
 
     var currentIndex by remember { mutableIntStateOf(selectedIndex) }
     val onSelectedUpdated by rememberUpdatedState(onSelected)
+    val onReselectedUpdated by rememberUpdatedState(onReselected)
 
     fun indexAt(positionX: Float): Int {
         if (tabWidthPx == 0f) return currentIndex
@@ -318,6 +320,8 @@ fun FloatingBottomBar(
         if (currentIndex != index) {
             currentIndex = index
             onSelectedUpdated(index)
+        } else {
+            onReselectedUpdated()
         }
         dampedDragAnimation.animateToValue(index.toFloat())
     }

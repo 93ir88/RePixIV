@@ -89,6 +89,8 @@ object PlayerState {
     var volume by mutableFloatStateOf(80f)
     var optionsOpen by mutableStateOf(false)
     val trending = mutableStateListOf<Track>()
+    /** Most played tracks shown at the top of "For You"; fixed until the feed is refreshed so rows don't jump around. */
+    var forYouHead by mutableStateOf<List<Track>>(emptyList())
     var trendingError by mutableStateOf<String?>(null)
     var trendingLoading by mutableStateOf(false)
     /** Token for the next page of the "For You" feed (null when there is no more). */

@@ -8,7 +8,6 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
-import java.util.Locale
 
 /** A playable item. [id] is a YouTube video id. */
 data class Track(
@@ -31,8 +30,16 @@ object YouTubeMusic {
     private const val API = "https://www.googleapis.com/youtube/v3"
     private const val MUSIC_CATEGORY = "10"
 
+    private val ARABIC = Regex("[\\u0600-\\u06FF\\u0750-\\u077F\\u08A0-\\u08FF\\uFB50-\\uFDFF\\uFE70-\\uFEFF]")
+
+    /** True when the track's title or artist is written in Arabic script. */
+    fun isArabic(t: Track): Boolean = ARABIC.containsMatchIn(t.title) || ARABIC.containsMatchIn(t.artist)
+
     /** Region whose music chart worked on the first page; later pages must use the same one. */
     private var chartRegion: String? = null
+
+    /** Music chart regions that aren't Arabic-speaking. */
+    private val RegionPool = listOf("US", "GB", "CA", "AU", "DE", "FR", "BR", "MX", "KR", "JP", "IN", "ES", "IT", "SE", "NL")
 
     /** "For You" feed, first page: music you liked on YouTube / YouTube Music, then what's popular in music. */
     suspend fun forYou(): TrackPage = withContext(Dispatchers.IO) {
@@ -40,10 +47,12 @@ object YouTubeMusic {
             parse(
                 get("$API/videos?part=snippet,status&myRating=like&maxResults=50"),
                 musicOnly = true,
+                hideArabic = true,
             ).tracks
         }.getOrDefault(emptyList())
         val pop = popular(null)
-        TrackPage((liked + pop.tracks).distinctBy { it.id }, pop.next)
+        // shuffled so every refresh shows a different mix
+        TrackPage((liked.shuffled() + pop.tracks.shuffled()).distinctBy { it.id }, pop.next)
     }
 
     /** Next page of the popular-music chart. */
@@ -53,8 +62,9 @@ object YouTubeMusic {
         val regions = if (token != null && chartRegion != null) {
             listOf(chartRegion!!)
         } else {
-            // Not every region has a music chart, so fall back to the US one.
-            listOf(Locale.getDefault().country.ifEmpty { "US" }, "US").distinct()
+            // Always use a non-Arabic-speaking chart (not the device region), so the feed isn't Arabic by default.
+            // a different chart each refresh, so the feed isn't the same songs every time
+            RegionPool.shuffled()
         }
         val page = if (token != null) "&pageToken=${enc(token)}" else ""
         for (r in regions) {
@@ -62,6 +72,7 @@ object YouTubeMusic {
                 parse(
                     get("$API/videos?part=snippet,status&chart=mostPopular&videoCategoryId=$MUSIC_CATEGORY&maxResults=50&regionCode=$r$page"),
                     musicOnly = false,
+                    hideArabic = true,
                 )
             }
             res.getOrNull()?.takeIf { it.tracks.isNotEmpty() }?.let {
@@ -85,7 +96,7 @@ object YouTubeMusic {
         )
     }
 
-    private fun parse(text: String, musicOnly: Boolean): TrackPage {
+    private fun parse(text: String, musicOnly: Boolean, hideArabic: Boolean = false): TrackPage {
         val root = JSONObject(text)
         val next = root.optString("nextPageToken").ifEmpty { null }
         val arr: JSONArray = root.optJSONArray("items") ?: return TrackPage(emptyList(), next)
@@ -99,16 +110,22 @@ object YouTubeMusic {
             if (musicOnly && sn.optString("categoryId") != MUSIC_CATEGORY) return@runCatching
             val status = o.optJSONObject("status")
             if (status != null && !status.optBoolean("embeddable", true)) return@runCatching
+            if (hideArabic) {
+                val lang = sn.optString("defaultAudioLanguage").ifEmpty { sn.optString("defaultLanguage") }
+                if (lang.startsWith("ar", ignoreCase = true)) return@runCatching
+            }
             val th = sn.optJSONObject("thumbnails")
             val image = listOf("high", "medium", "default")
                 .firstNotNullOfOrNull { th?.optJSONObject(it)?.optString("url")?.takeIf { u -> u.isNotEmpty() } }
                 .orEmpty()
-            out += Track(
+            val track = Track(
                 id = id,
                 title = clean(sn.optString("title")),
                 artist = clean(sn.optString("channelTitle")).removeSuffix(" - Topic"),
                 image = image,
             )
+            if (hideArabic && isArabic(track)) return@runCatching
+            out += track
         }
         return TrackPage(out.distinctBy { it.id }, next)
     }

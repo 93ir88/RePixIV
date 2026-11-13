@@ -84,6 +84,8 @@ import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Badge
 import top.yukonga.miuix.kmp.basic.Icon
+import com.repixiv.app.ui.RefreshNavigationBarItem
+import com.repixiv.app.ui.RefreshableIcon
 import top.yukonga.miuix.kmp.theme.LocalContentColor
 import top.yukonga.miuix.kmp.basic.NavigationBar
 import top.yukonga.miuix.kmp.basic.NavigationBarDisplayMode
@@ -306,11 +308,13 @@ private fun AppNavigationBar(
                     mode = NavigationBarDisplayMode.entries[appState.navigationBarMode],
                 ) {
                     navigationItems.forEachIndexed { index, item ->
-                        NavigationBarItem(
+                        RefreshNavigationBarItem(
                             selected = page == index,
-                            onClick = { mainPagerState.animateToPage(index) },
+                            onClick = { if (page == index) TabReselect.fire(index) else mainPagerState.animateToPage(index) },
                             icon = item.icon,
                             label = item.label,
+                            spinning = TabReselect.isRefreshing(index),
+                            mode = NavigationBarDisplayMode.entries[appState.navigationBarMode],
                             badge = navigationItemBadge(index, appState.showNavigationBarBadge),
                         )
                     }
@@ -335,6 +339,7 @@ private fun AppNavigationBar(
                 FloatingBottomBar(
                     selectedIndex = page,
                     onSelected = { mainPagerState.animateToPage(it) },
+                    onReselected = { TabReselect.fire(page) },
                     tabsCount = navigationItems.size,
                     blurBackdrop = if (appState.enableBlur) backdrop else null,
                 ) { activateTab ->
@@ -346,7 +351,12 @@ private fun AppNavigationBar(
                         ) {
                             val contentColor = LocalContentColor.current
                             Box {
-                                Icon(imageVector = item.icon, contentDescription = item.label, tint = contentColor)
+                                RefreshableIcon(
+                                    icon = item.icon,
+                                    spinning = TabReselect.isRefreshing(index),
+                                    tint = contentColor,
+                                    contentDescription = item.label,
+                                )
                                 navigationItemBadge(index, appState.showNavigationBarBadge)?.let { badge ->
                                     Box(Modifier.align(Alignment.TopEnd).offset(x = 8.dp, y = (-4).dp)) { badge() }
                                 }

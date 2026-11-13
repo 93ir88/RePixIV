@@ -26,6 +26,9 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import com.repixiv.app.TabReselect
+import com.repixiv.app.util.scrollToTopFast
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -76,6 +79,23 @@ fun FollowingPage(padding: PaddingValues) {
             if (tab == 0) posts.ensureLoaded() else users.ensureLoaded()
         }
     }
+
+    // tapping the Following icon while on Following: jump to the top and refresh
+    val onReselect by rememberUpdatedState<() -> Unit> {
+        if (uid != null && !refreshing) {
+            scope.launch { listStates[tab].scrollToTopFast() }
+            refreshing = true
+            scope.launch {
+                try {
+                    if (tab == 0) posts.refresh() else users.refresh()
+                } finally {
+                    refreshing = false
+                }
+            }
+        }
+    }
+    LaunchedEffect(refreshing) { TabReselect.setRefreshing(1, refreshing) }
+    LaunchedEffect(Unit) { TabReselect.events.collect { if (it == 1) onReselect() } }
 
     PageScaffold(
         title = "Following",
