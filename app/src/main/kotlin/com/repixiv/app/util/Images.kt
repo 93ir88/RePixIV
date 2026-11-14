@@ -4,6 +4,8 @@ import android.graphics.Bitmap
 import android.graphics.drawable.Drawable
 import android.widget.ImageView
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.State
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -62,14 +64,26 @@ fun Illust.pageUrl(page: Int, cap: Int): String {
 fun Illust.fullUrl(page: Int, cap: Int): String =
     if (cap == 0) originalUrls.getOrElse(page) { largeUrls.getOrElse(page) { imageUrl } } else pageUrl(page, cap)
 
+/**
+ * True while the screen/tab hosting this content is fully hidden under an opaque screen. Covered content stays
+ * composed (so its state and scroll position survive) but releases its decoded bitmaps; they're reloaded from
+ * Glide's memory/disk cache the moment it becomes visible again, at full quality.
+ */
+val LocalCovered = compositionLocalOf<State<Boolean>?> { null }
+
 @Composable
 fun RemoteImage(url: String, circle: Boolean, modifier: Modifier, crop: Boolean = true, plain: Boolean = false) {
     val cap = lowResCap(LocalAppState.current.lowRes)
+    val covered = LocalCovered.current
     AndroidView(
         modifier = modifier,
         factory = { ctx -> ImageView(ctx).apply { scaleType = ImageView.ScaleType.CENTER_CROP } },
         update = { view ->
-            if (url.isNotBlank()) {
+            if (covered?.value == true) {
+                // Hidden under another screen: hand the bitmap back to Glide's pool instead of pinning it.
+                Glide.with(view).clear(view)
+                view.setImageDrawable(null)
+            } else if (url.isNotBlank()) {
                 view.scaleType = if (crop || circle) ImageView.ScaleType.CENTER_CROP else ImageView.ScaleType.FIT_CENTER
                 val base = if (plain) Glide.with(view).load(url) else Glide.with(view).load(pixivGlideUrl(url))
                 val req = if (cap > 0 && !circle) base.override(cap, cap) else base
@@ -79,6 +93,16 @@ fun RemoteImage(url: String, circle: Boolean, modifier: Modifier, crop: Boolean 
                     else -> req.fitCenter()
                 }.into(view)
             }
+        },
+        // Scrolled off / screen closed: release the bitmap right away so Glide can recycle it, rather than
+        // waiting for the GC. Keeps memory flat during long scrolling sessions.
+        onReset = { view ->
+            Glide.with(view).clear(view)
+            view.setImageDrawable(null)
+        },
+        onRelease = { view ->
+            Glide.with(view).clear(view)
+            view.setImageDrawable(null)
         },
     )
 }

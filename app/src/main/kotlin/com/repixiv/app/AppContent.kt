@@ -47,11 +47,14 @@ import androidx.compose.foundation.pager.PagerDefaults
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.Composable
+import com.repixiv.app.util.LocalCovered
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -138,7 +141,11 @@ fun AppContent(padding: PaddingValues) {
     }
 
     val nav = remember { Navigator() }
-    CompositionLocalProvider(LocalNavigator provides nav) {
+    // The tabs are hidden (but still composed) whenever an opaque screen fully covers them.
+    val tabsCovered = remember(nav) {
+        derivedStateOf { nav.entries.any { !it.closing && it.progress >= 0.999f } }
+    }
+    CompositionLocalProvider(LocalNavigator provides nav, LocalCovered provides tabsCovered) {
         Box(modifier = Modifier.fillMaxSize()) {
             // The tabs are not drawn while an opaque screen covers them (state is kept).
             Box(
@@ -191,6 +198,10 @@ private fun OverlayLayer(nav: Navigator, entry: NavEntry, aboveProgress: () -> F
     LaunchedEffect(Unit) {
         snapshotFlow { progress.value }.collect { entry.progress = it }
     }
+    // aboveProgress is rebuilt whenever the entry above changes, so always read the latest one.
+    val latestAbove = rememberUpdatedState(aboveProgress)
+    val covered = remember { derivedStateOf { latestAbove.value() >= 0.999f } }
+    CompositionLocalProvider(LocalCovered provides covered) {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -213,6 +224,7 @@ private fun OverlayLayer(nav: Navigator, entry: NavEntry, aboveProgress: () -> F
             is Screen.FeedList -> FeedListScreen(s.title, s.kind)
             Screen.AccountSettings -> AccountSettingsScreen()
         }
+    }
     }
 }
 

@@ -76,6 +76,7 @@ import com.repixiv.app.pixiv.Illust
 import com.repixiv.app.pixiv.Pixiv
 import com.repixiv.app.pixiv.UserDetail
 import com.repixiv.app.util.AdaptiveTopAppBar
+import com.repixiv.app.util.LocalCovered
 import com.repixiv.app.util.RemoteImage
 import com.repixiv.app.util.pageScrollModifiers
 import com.repixiv.app.util.fullUrl
@@ -167,7 +168,12 @@ private fun ZoomableImage(previewUrl: String, fullUrl: String, maxPx: Int, onZoo
     var bitmap by remember(fullUrl) { mutableStateOf<ImageBitmap?>(null) }
     var fullLoaded by remember(fullUrl) { mutableStateOf(false) }
 
-    DisposableEffect(previewUrl) {
+    // While another screen (e.g. comments) fully covers the viewer, drop its big bitmaps; they reload at full
+    // quality (from Glide's cache) as soon as the viewer is visible again.
+    val covered = LocalCovered.current?.value == true
+
+    DisposableEffect(previewUrl, covered) {
+        if (covered) return@DisposableEffect onDispose {}
         val target = object : CustomTarget<Bitmap>() {
             override fun onResourceReady(resource: Bitmap, transition: Transition<in Bitmap>?) {
                 if (!fullLoaded) bitmap = resource.asImageBitmap()
@@ -177,7 +183,8 @@ private fun ZoomableImage(previewUrl: String, fullUrl: String, maxPx: Int, onZoo
         Glide.with(context).asBitmap().load(pixivGlideUrl(previewUrl)).into(target)
         onDispose { Glide.with(context).clear(target) }
     }
-    DisposableEffect(fullUrl) {
+    DisposableEffect(fullUrl, covered) {
+        if (covered) return@DisposableEffect onDispose {}
         val target = object : CustomTarget<Bitmap>(maxPx, maxPx) {
             override fun onResourceReady(resource: Bitmap, transition: Transition<in Bitmap>?) {
                 fullLoaded = true
@@ -187,6 +194,12 @@ private fun ZoomableImage(previewUrl: String, fullUrl: String, maxPx: Int, onZoo
         }
         Glide.with(context).asBitmap().load(pixivGlideUrl(fullUrl)).into(target)
         onDispose { Glide.with(context).clear(target) }
+    }
+    LaunchedEffect(covered) {
+        if (covered) {
+            bitmap = null
+            fullLoaded = false
+        }
     }
 
     var scale by remember { mutableFloatStateOf(1f) }
