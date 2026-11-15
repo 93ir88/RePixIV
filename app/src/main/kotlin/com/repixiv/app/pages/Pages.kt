@@ -5,6 +5,7 @@
 
 package com.repixiv.app.pages
 
+import androidx.compose.runtime.key
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
@@ -126,35 +127,39 @@ internal fun PageScaffold(
     alwaysShowBar: Boolean = false,
     content: @Composable (PaddingValues, Modifier, ScrollBehavior) -> Unit,
 ) {
-    val appState = LocalAppState.current
-    val showBar = overlay || alwaysShowBar || appState.showTopAppBar
-    val backdrop = rememberBlurBackdrop()
-    val blurActive = backdrop != null
-    val barColor = if (blurActive) Color.Transparent else MiuixTheme.colorScheme.surface
-    val scrollBehavior = MiuixScrollBehavior()
-    Scaffold(
-        topBar = {
-            BlurredBar(backdrop, blurActive, scrollBehavior) {
-                AdaptiveTopAppBar(
-                    title = title,
-                    showTopAppBar = showBar,
-                    scrollBehavior = scrollBehavior,
-                    color = barColor,
-                    navigationIcon = navigationIcon,
-                    bottomContent = bottomContent,
-                    actions = actions,
+    // The top bar changes size when you log in/out (tabs and actions appear). Rebuilding the scaffold on that
+    // change makes it re-measure instead of keeping the logged-out layout until the app is restarted.
+    key(Pixiv.session != null) {
+        val appState = LocalAppState.current
+        val showBar = overlay || alwaysShowBar || appState.showTopAppBar
+        val backdrop = rememberBlurBackdrop()
+        val blurActive = backdrop != null
+        val barColor = if (blurActive) Color.Transparent else MiuixTheme.colorScheme.surface
+        val scrollBehavior = MiuixScrollBehavior()
+        Scaffold(
+            topBar = {
+                BlurredBar(backdrop, blurActive, scrollBehavior) {
+                    AdaptiveTopAppBar(
+                        title = title,
+                        showTopAppBar = showBar,
+                        scrollBehavior = scrollBehavior,
+                        color = barColor,
+                        navigationIcon = navigationIcon,
+                        bottomContent = bottomContent,
+                        actions = actions,
+                    )
+                }
+            },
+            bottomBar = bottomBar,
+        ) { inner ->
+            val contentPadding = pageContentPadding(inner, if (overlay) inner else padding)
+            Box(modifier = if (backdrop != null) Modifier.layerBackdrop(backdrop) else Modifier) {
+                content(
+                    contentPadding,
+                    Modifier.pageScrollModifiers(appState.enableScrollEndHaptic, showBar, scrollBehavior),
+                    scrollBehavior,
                 )
             }
-        },
-        bottomBar = bottomBar,
-    ) { inner ->
-        val contentPadding = pageContentPadding(inner, if (overlay) inner else padding)
-        Box(modifier = if (backdrop != null) Modifier.layerBackdrop(backdrop) else Modifier) {
-            content(
-                contentPadding,
-                Modifier.pageScrollModifiers(appState.enableScrollEndHaptic, showBar, scrollBehavior),
-                scrollBehavior,
-            )
         }
     }
 }

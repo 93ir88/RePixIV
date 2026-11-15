@@ -12,6 +12,11 @@ object TabReselect {
         events.tryEmit(index)
     }
 
+    private val tapped = HashSet<Int>()
+
+    /** True only the first time this tab is tapped since the app process started. */
+    fun firstTap(index: Int): Boolean = tapped.add(index)
+
     /** Pages that are refreshing right now; their bottom-bar icon turns into a spinning refresh icon. */
     private var refreshingPages by mutableStateOf(emptySet<Int>())
 

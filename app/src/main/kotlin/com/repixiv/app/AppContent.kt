@@ -328,7 +328,7 @@ private fun AppNavigationBar(
                     navigationItems.forEachIndexed { index, item ->
                         RefreshNavigationBarItem(
                             selected = page == index,
-                            onClick = { if (page == index) TabReselect.fire(index) else mainPagerState.animateToPage(index) },
+                            onClick = { if (page == index) mainPagerState.tabReselected(index) else mainPagerState.tabSelected(index) },
                             icon = item.icon,
                             label = item.label,
                             spinning = TabReselect.isRefreshing(index),
@@ -356,8 +356,8 @@ private fun AppNavigationBar(
             ) {
                 FloatingBottomBar(
                     selectedIndex = page,
-                    onSelected = { mainPagerState.animateToPage(it) },
-                    onReselected = { TabReselect.fire(page) },
+                    onSelected = { mainPagerState.tabSelected(it) },
+                    onReselected = { mainPagerState.tabReselected(page) },
                     tabsCount = navigationItems.size,
                     blurBackdrop = if (appState.enableBlur) backdrop else null,
                 ) { activateTab ->
@@ -476,7 +476,22 @@ class MainPagerState(
 
     private var navJob: Job? = null
 
-    fun animateToPage(targetIndex: Int) {
+    /**
+     * Bottom-bar tap on another tab. The first time each tab is opened after the app starts, it also scrolls to
+     * the very top (0.5 s) and refreshes once the page has settled, same as tapping the active tab.
+     */
+    fun tabSelected(index: Int) {
+        val first = TabReselect.firstTap(index)
+        animateToPage(index, if (first) ({ TabReselect.fire(index) }) else null)
+    }
+
+    /** Bottom-bar tap on the tab that is already open: scroll to top and refresh. */
+    fun tabReselected(index: Int) {
+        TabReselect.firstTap(index)
+        TabReselect.fire(index)
+    }
+
+    fun animateToPage(targetIndex: Int, onSettled: (() -> Unit)? = null) {
         if (targetIndex == selectedPage) return
         navJob?.cancel()
         selectedPage = targetIndex
@@ -485,6 +500,7 @@ class MainPagerState(
             val myJob = coroutineContext.job
             try {
                 pagerState.springAnimateToPage(targetIndex)
+                onSettled?.invoke()
             } finally {
                 if (navJob == myJob) {
                     isNavigating = false
