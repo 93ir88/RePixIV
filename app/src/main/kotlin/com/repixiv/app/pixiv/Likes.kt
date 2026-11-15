@@ -25,19 +25,30 @@ object Likes {
     }
 }
 
-/** First comment of a post, shown as a preview under it. */
+/** First comment of a post (shown as a preview under it) plus the real comment count reported by the server. */
 object CommentPreviews {
     val cache = mutableStateMapOf<Long, Comment>()
+    val counts = mutableStateMapOf<Long, Int>()
     private val inFlight = HashSet<Long>()
 
+    /** Comment count to display: the server-reported one when we have it, else whatever the feed said. */
+    fun count(a: Illust): Int = counts[a.id] ?: a.totalComments
+
+    fun update(illustId: Long, first: Comment?, total: Int) {
+        if (first != null) cache[illustId] = first else cache.remove(illustId)
+        if (total >= 0) counts[illustId] = total
+    }
+
     suspend fun load(illustId: Long) {
-        if (illustId in cache || !inFlight.add(illustId)) return
+        if ((illustId in cache && illustId in counts) || !inFlight.add(illustId)) return
         try {
-            Pixiv.comments(illustId).items.firstOrNull()?.let { cache[illustId] = it }
+            val p = Pixiv.comments(illustId)
+            update(illustId, p.items.firstOrNull(), p.total.takeIf { it >= 0 } ?: p.items.size)
         } catch (e: CancellationException) {
-            inFlight.remove(illustId)
             throw e
         } catch (_: Exception) {
+        } finally {
+            inFlight.remove(illustId)
         }
     }
 }

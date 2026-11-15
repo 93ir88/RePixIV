@@ -67,9 +67,12 @@ data class Comment(
     val userName: String,
     val userAvatar: String,
     val stampUrl: String?,
+    val hasReplies: Boolean = false,
+    val parentId: Long = 0,
 )
 
-data class CommentPage(val items: List<Comment>, val nextUrl: String?)
+/** [total] is the server-side comment count, or -1 when the response did not carry one. */
+data class CommentPage(val items: List<Comment>, val nextUrl: String?, val total: Int = -1)
 
 data class TrendTag(val tag: String, val translated: String, val imageUrl: String)
 
@@ -348,23 +351,35 @@ object Pixiv {
     }
 
     suspend fun comments(illustId: Long, nextUrl: String? = null): CommentPage = withContext(Dispatchers.IO) {
-        val j = get(nextUrl ?: "$API/v3/illust/comments?illust_id=$illustId")
+        parseComments(get(nextUrl ?: "$API/v3/illust/comments?illust_id=$illustId"))
+    }
+
+    /** Replies to a top-level comment. */
+    suspend fun commentReplies(commentId: Long, nextUrl: String? = null): CommentPage = withContext(Dispatchers.IO) {
+        parseComments(get(nextUrl ?: "$API/v2/illust/comment/replies?comment_id=$commentId"), parentId = commentId)
+    }
+
+    private fun parseComments(j: JSONObject, parentId: Long = 0): CommentPage {
         val arr = j.optJSONArray("comments")
         val out = ArrayList<Comment>()
         if (arr != null) for (i in 0 until arr.length()) runCatching {
             val o = arr.getJSONObject(i)
-            val u = o.getJSONObject("user")
+            val u = o.optJSONObject("user")
+            val parent = o.optJSONObject("parent_comment")?.optLong("id", 0L) ?: 0L
             out += Comment(
                 id = o.getLong("id"),
-                text = o.optString("comment"),
+                text = o.optString("comment").takeIf { it != "null" }.orEmpty(),
                 date = o.optString("date"),
-                userId = u.optLong("id"),
-                userName = u.optString("name"),
-                userAvatar = u.optJSONObject("profile_image_urls")?.optString("medium").orEmpty(),
-                stampUrl = o.optJSONObject("stamp")?.optString("stamp_url")?.takeIf { it.isNotBlank() },
+                userId = u?.optLong("id") ?: 0L,
+                userName = u?.optString("name").orEmpty(),
+                userAvatar = u?.optJSONObject("profile_image_urls")?.optString("medium").orEmpty(),
+                stampUrl = o.optJSONObject("stamp")?.optString("stamp_url")?.takeIf { it.isNotBlank() && it != "null" },
+                hasReplies = o.optBoolean("has_replies", false),
+                parentId = if (parentId != 0L) parentId else parent,
             )
         }
-        CommentPage(out, j.optString("next_url").takeIf { it.isNotBlank() && it != "null" })
+        val total = if (j.has("total_comments")) j.optInt("total_comments", -1) else -1
+        return CommentPage(out, j.optString("next_url").takeIf { it.isNotBlank() && it != "null" }, total)
     }
 
     suspend fun addComment(illustId: Long, text: String, parentCommentId: Long? = null) = withContext(Dispatchers.IO) {

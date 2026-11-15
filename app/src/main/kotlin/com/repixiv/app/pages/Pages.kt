@@ -297,7 +297,8 @@ internal fun LikeButton(a: Illust, modifier: Modifier = Modifier, idleTint: Colo
 private fun CommentsPreview(a: Illust) {
     val nav = LocalNavigator.current
     val summary = MiuixTheme.colorScheme.onSurfaceVariantSummary
-    LaunchedEffect(a.id) { if (a.totalComments > 0) CommentPreviews.load(a.id) }
+    LaunchedEffect(a.id) { CommentPreviews.load(a.id) }
+    val count = CommentPreviews.count(a)
     val preview = CommentPreviews.cache[a.id]
     Card(
         modifier = Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp),
@@ -307,7 +308,7 @@ private fun CommentsPreview(a: Illust) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Comments", fontWeight = FontWeight.Bold, fontSize = 15.sp)
                 Text(
-                    a.totalComments.toString(),
+                    count.toString(),
                     fontSize = 12.sp,
                     modifier = Modifier
                         .padding(start = 8.dp)
@@ -327,7 +328,7 @@ private fun CommentsPreview(a: Illust) {
                         modifier = Modifier.padding(start = 8.dp),
                     )
                 }
-            } else if (a.totalComments == 0) {
+            } else if (count == 0) {
                 Text("Be the first to comment", color = summary, fontSize = 14.sp, modifier = Modifier.padding(top = 6.dp))
             }
         }

@@ -5,6 +5,9 @@
 
 package com.repixiv.app.pages
 
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.runtime.mutableStateMapOf
 import android.widget.Toast
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -109,7 +112,9 @@ fun PostScreen(illust: Illust) {
     val authorWorks = remember(illust.userId) { FeedState { Pixiv.userIllusts(illust.userId, it) } }
     var comments by remember(illust.id) { mutableStateOf<List<Comment>>(emptyList()) }
     var input by remember(illust.id) { mutableStateOf(TextFieldValue("")) }
-    var replyTo by remember(illust.id) { mutableStateOf<Comment?>(null) }
+    val threads = remember(illust.id) { mutableStateMapOf<Long, ReplyThread>() }
+    var replyTo by remember(illust.id) { mutableStateOf<ReplyTarget?>(null) }
+    val inputFocus = remember { FocusRequester() }
     var sending by remember(illust.id) { mutableStateOf(false) }
     var captionExpanded by remember(illust.id) { mutableStateOf(false) }
     val captionText = remember(illust.id) { htmlToText(illust.caption) }
@@ -118,12 +123,18 @@ fun PostScreen(illust: Illust) {
 
     suspend fun loadComments() {
         try {
-            comments = Pixiv.comments(illust.id).items.take(3)
-            comments.firstOrNull()?.let { CommentPreviews.cache[illust.id] = it }
+            val p = Pixiv.comments(illust.id)
+            comments = p.items.take(3)
+            CommentPreviews.update(illust.id, p.items.firstOrNull(), if (p.total >= 0) p.total else p.items.size)
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
         }
+    }
+
+    // Tapping "Reply" focuses the comment box and opens the keyboard.
+    LaunchedEffect(replyTo) {
+        if (replyTo != null) runCatching { inputFocus.requestFocus() }
     }
 
     LaunchedEffect(illust.id) {
@@ -254,7 +265,7 @@ fun PostScreen(illust: Illust) {
             item(key = "stats") { Column {
                 Column(Modifier.fillMaxWidth().padding(12.dp)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        StatChip(MiuixIcons.Messages, illust.totalComments)
+                        StatChip(MiuixIcons.Messages, CommentPreviews.count(illust))
                         StatChip(MiuixIcons.Favorites, Likes.count(illust))
                         StatChip(MiuixIcons.Show, illust.views)
                     }
@@ -315,7 +326,7 @@ fun PostScreen(illust: Illust) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Comments", fontWeight = FontWeight.Bold, fontSize = 16.sp)
                         Text(
-                            illust.totalComments.toString(),
+                            CommentPreviews.count(illust).toString(),
                             fontSize = 12.sp,
                             modifier = Modifier
                                 .padding(start = 8.dp)
@@ -325,8 +336,8 @@ fun PostScreen(illust: Illust) {
                     }
                     replyTo?.let { r ->
                         Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text("Replying to ${r.userName}", color = summary, fontSize = 12.sp, modifier = Modifier.weight(1f))
-                            Text("Cancel", color = MiuixTheme.colorScheme.primary, fontSize = 12.sp, modifier = Modifier.clickable { replyTo = null })
+                            Text("Replying to ${r.target.userName}", color = summary, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                            Text("Cancel", color = MiuixTheme.colorScheme.primary, fontSize = 12.sp, modifier = Modifier.clickable { replyTo = null }.padding(8.dp))
                         }
                     }
                     Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -334,21 +345,23 @@ fun PostScreen(illust: Illust) {
                         TextField(
                             value = input,
                             onValueChange = { input = it },
-                            label = "Leave a comment",
+                            label = if (replyTo != null) "Write a reply…" else "Leave a comment",
                             useLabelAsPlaceholder = true,
-                            modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
+                            modifier = Modifier.weight(1f).padding(horizontal = 8.dp).focusRequester(inputFocus),
                         )
                         IconButton(
                             enabled = !sending && input.text.isNotBlank(),
                             onClick = {
                                 val text = input.text.trim()
+                                val target = replyTo
                                 sending = true
                                 scope.launch {
                                     try {
-                                        Pixiv.addComment(illust.id, text, replyTo?.id)
+                                        Pixiv.addComment(illust.id, text, target?.root?.id)
                                         input = TextFieldValue("")
                                         replyTo = null
                                         loadComments()
+                                        target?.let { threads.refreshReplies(it.root.id) }
                                     } catch (e: CancellationException) {
                                         throw e
                                     } catch (e: Exception) {
@@ -363,29 +376,15 @@ fun PostScreen(illust: Illust) {
                         }
                     }
                     comments.forEach { c ->
-                        Row(Modifier.fillMaxWidth().padding(top = 14.dp)) {
-                            Box(Modifier.size(36.dp).clip(CircleShape)) {
-                                RemoteImage(c.userAvatar, true, Modifier.fillMaxSize())
-                                TapOverlay(Modifier.matchParentSize()) { nav.openUser(c.userId) }
-                            }
-                            Column(Modifier.padding(start = 10.dp).weight(1f)) {
-                                Text(c.userName, fontWeight = FontWeight.Bold, fontSize = 14.sp, maxLines = 1)
-                                if (c.stampUrl != null) {
-                                    RemoteImage(c.stampUrl, false, Modifier.padding(top = 4.dp).size(72.dp), crop = false)
-                                } else {
-                                    Text(c.text, fontSize = 14.sp, modifier = Modifier.padding(top = 2.dp))
-                                }
-                                Row(Modifier.padding(top = 4.dp)) {
-                                    Text(relativeTime(c.date), color = summary, fontSize = 12.sp)
-                                    Text(
-                                        "Reply",
-                                        color = MiuixTheme.colorScheme.primary,
-                                        fontSize = 12.sp,
-                                        modifier = Modifier.padding(start = 12.dp).clickable { replyTo = c },
-                                    )
-                                }
-                            }
-                        }
+                        CommentThread(
+                            c = c,
+                            threads = threads,
+                            avatarSize = 36.dp,
+                            textSize = 14,
+                            dateText = { relativeTime(it.date) },
+                            onReply = { replyTo = it },
+                            modifier = Modifier.padding(top = 14.dp),
+                        )
                     }
                     Button(
                         onClick = { nav.push(Screen.Comments(illust)) },

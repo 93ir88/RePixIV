@@ -5,6 +5,10 @@
 
 package com.repixiv.app.pages
 
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.foundation.clickable
 import android.graphics.Bitmap
 import android.widget.Toast
 import androidx.compose.foundation.Image
@@ -291,16 +295,19 @@ fun FeedListScreen(title: String, kind: String) {
 
 @Composable
 fun CommentsScreen(illust: Illust) {
-    val nav = LocalNavigator.current
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val summary = MiuixTheme.colorScheme.onSurfaceVariantSummary
     val list = remember(illust.id) { mutableStateListOf<Comment>() }
+    val threads = remember(illust.id) { mutableStateMapOf<Long, ReplyThread>() }
     var next by remember(illust.id) { mutableStateOf<String?>(null) }
     var loading by remember(illust.id) { mutableStateOf(false) }
     var loaded by remember(illust.id) { mutableStateOf(false) }
     var error by remember(illust.id) { mutableStateOf<String?>(null) }
     var input by remember(illust.id) { mutableStateOf(TextFieldValue("")) }
     var sending by remember(illust.id) { mutableStateOf(false) }
+    var replyTo by remember(illust.id) { mutableStateOf<ReplyTarget?>(null) }
+    val focus = remember { FocusRequester() }
 
     suspend fun load(reset: Boolean) {
         if (loading) return
@@ -313,8 +320,8 @@ fun CommentsScreen(illust: Illust) {
             list.addAll(p.items.filter { seen.add(it.id) })
             next = p.nextUrl
             loaded = true
-            CommentPreviews.cache.remove(illust.id)
-            list.firstOrNull()?.let { CommentPreviews.cache[illust.id] = it }
+            // Only trust the server total; fall back to what we have loaded when the response has none.
+            CommentPreviews.update(illust.id, list.firstOrNull(), if (p.total >= 0) p.total else list.size)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -325,15 +332,22 @@ fun CommentsScreen(illust: Illust) {
     }
     LaunchedEffect(illust.id) { load(true) }
 
+    // Tapping "Reply" focuses the box and opens the keyboard.
+    LaunchedEffect(replyTo) {
+        if (replyTo != null) runCatching { focus.requestFocus() }
+    }
+
     fun send() {
         val text = input.text.trim()
         if (text.isEmpty() || sending) return
+        val target = replyTo
         sending = true
         scope.launch {
             try {
-                Pixiv.addComment(illust.id, text)
+                Pixiv.addComment(illust.id, text, target?.root?.id)
                 input = TextFieldValue("")
-                load(true)
+                replyTo = null
+                if (target != null) threads.refreshReplies(target.root.id) else load(true)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -350,68 +364,86 @@ fun CommentsScreen(illust: Illust) {
         overlay = true,
         navigationIcon = { BackButton() },
         bottomBar = {
-            Row(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(MiuixTheme.colorScheme.surface)
                     .navigationBarsPadding()
-                    .imePadding()
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
+                    .imePadding(),
             ) {
-                TextField(
-                    value = input,
-                    onValueChange = { input = it },
-                    label = "Add a comment…",
-                    useLabelAsPlaceholder = true,
-                    modifier = Modifier.weight(1f),
-                )
-                IconButton(onClick = { send() }, enabled = !sending && input.text.isNotBlank()) {
-                    Icon(
-                        imageVector = MiuixIcons.Send,
-                        contentDescription = "Send",
-                        tint = MiuixTheme.colorScheme.primary,
+                replyTo?.let { r ->
+                    Row(
+                        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("Replying to ${r.target.userName}", color = summary, fontSize = 13.sp, maxLines = 1, modifier = Modifier.weight(1f))
+                        Text(
+                            "Cancel",
+                            color = MiuixTheme.colorScheme.primary,
+                            fontSize = 13.sp,
+                            modifier = Modifier.clickable { replyTo = null }.padding(8.dp),
+                        )
+                    }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TextField(
+                        value = input,
+                        onValueChange = { input = it },
+                        label = if (replyTo != null) "Write a reply…" else "Add a comment…",
+                        useLabelAsPlaceholder = true,
+                        modifier = Modifier.weight(1f).focusRequester(focus),
                     )
+                    IconButton(onClick = { send() }, enabled = !sending && input.text.isNotBlank()) {
+                        Icon(
+                            imageVector = MiuixIcons.Send,
+                            contentDescription = "Send",
+                            tint = MiuixTheme.colorScheme.primary,
+                        )
+                    }
                 }
             }
         },
     ) { contentPadding, scrollModifier, _ ->
-        LazyColumn(modifier = scrollModifier, contentPadding = contentPadding) {
-            items(list, key = { it.id }) { c ->
-                Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
-                    Box(Modifier.size(40.dp).clip(CircleShape)) {
-                        RemoteImage(c.userAvatar, true, Modifier.fillMaxSize())
-                        TapOverlay(Modifier.matchParentSize()) { nav.openUser(c.userId) }
-                    }
-                    Column(Modifier.padding(start = 12.dp).weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(c.userName, fontWeight = FontWeight.Bold, fontSize = 14.sp, maxLines = 1, modifier = Modifier.weight(1f, fill = false))
-                            Text(
-                                c.date.replace('T', ' ').take(16),
-                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                                fontSize = 12.sp,
-                                modifier = Modifier.padding(start = 8.dp),
+        Box(Modifier.fillMaxSize()) {
+            LazyColumn(modifier = scrollModifier, contentPadding = contentPadding) {
+                items(list, key = { it.id }) { c ->
+                    CommentThread(
+                        c = c,
+                        threads = threads,
+                        avatarSize = 40.dp,
+                        textSize = 15,
+                        dateText = { it.date.replace('T', ' ').take(16) },
+                        onReply = { replyTo = it },
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    )
+                }
+                item(key = "footer") {
+                    val n = next
+                    if (n != null && error == null) LaunchedEffect(n) { load(false) }
+                    Box(Modifier.fillMaxWidth().padding(20.dp), contentAlignment = Alignment.Center) {
+                        when {
+                            loading -> InfiniteProgressIndicator()
+                            error != null -> Text(
+                                "${error ?: ""} — tap to retry",
+                                color = MiuixTheme.colorScheme.error,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.clickable { scope.launch { load(!loaded) } },
                             )
-                        }
-                        if (c.stampUrl != null) {
-                            RemoteImage(c.stampUrl, false, Modifier.padding(top = 6.dp).size(72.dp), crop = false)
-                        } else {
-                            Text(c.text, fontSize = 15.sp, modifier = Modifier.padding(top = 2.dp))
+                            loaded && list.isEmpty() -> Text("No comments yet", color = summary)
                         }
                     }
                 }
             }
-            item(key = "footer") {
-                val n = next
-                if (n != null && error == null) LaunchedEffect(n) { load(false) }
-                Box(Modifier.fillMaxWidth().padding(20.dp), contentAlignment = Alignment.Center) {
-                    when {
-                        loading -> InfiniteProgressIndicator()
-                        error != null -> Text(error ?: "", color = MiuixTheme.colorScheme.error, textAlign = TextAlign.Center)
-                        loaded && list.isEmpty() -> Text("No comments yet", color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
-                    }
-                }
-            }
+            // Opaque strip behind the title bar so scrolled comments never show through the (transparent) title.
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .height(contentPadding.calculateTopPadding())
+                    .background(MiuixTheme.colorScheme.surface),
+            )
         }
     }
 }
