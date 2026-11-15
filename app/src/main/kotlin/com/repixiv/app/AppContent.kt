@@ -71,6 +71,7 @@ import com.repixiv.app.ui.bakasu.FloatingBottomBar
 import com.repixiv.app.ui.bakasu.FloatingBottomBarItem
 import com.repixiv.app.pages.AccountSettingsScreen
 import com.repixiv.app.pages.CommentsScreen
+import com.repixiv.app.pages.NotificationsScreen
 import com.repixiv.app.pages.PostScreen
 import com.repixiv.app.pages.TrendingScreen
 import com.repixiv.app.pages.FeedListScreen
@@ -222,6 +223,7 @@ private fun OverlayLayer(nav: Navigator, entry: NavEntry, aboveProgress: () -> F
             is Screen.Comments -> CommentsScreen(s.illust)
             is Screen.Trending -> TrendingScreen(s.tags)
             is Screen.FeedList -> FeedListScreen(s.title, s.kind)
+            Screen.NotificationList -> NotificationsScreen()
             Screen.AccountSettings -> AccountSettingsScreen()
         }
     }

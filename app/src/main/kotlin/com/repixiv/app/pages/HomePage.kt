@@ -138,6 +138,14 @@ fun FeedPage(padding: PaddingValues) {
             refreshCurrent()
         }
     }
+    // Check for new replies on the user's comment threads now and once a minute while Home is alive.
+    LaunchedEffect(uid) {
+        if (uid == null) return@LaunchedEffect
+        while (true) {
+            com.repixiv.app.pixiv.Notifications.refresh()
+            kotlinx.coroutines.delay(60_000)
+        }
+    }
     LaunchedEffect(refreshing) { TabReselect.setRefreshing(0, refreshing) }
     LaunchedEffect(Unit) { TabReselect.events.collect { if (it == 0) onReselect() } }
 
@@ -145,6 +153,7 @@ fun FeedPage(padding: PaddingValues) {
         title = "Home",
         padding = padding,
         alwaysShowBar = true,
+        actions = { if (session != null) NotificationBell() },
         bottomContent = {
             if (session != null) {
                 TabRowWithContour(

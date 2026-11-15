@@ -34,6 +34,11 @@ object CommentPreviews {
     /** Comment count to display: the server-reported one when we have it, else whatever the feed said. */
     fun count(a: Illust): Int = counts[a.id] ?: a.totalComments
 
+    /** Optimistic +/- on the displayed count; [base] is what was shown before. */
+    fun bump(illustId: Long, delta: Int, base: Int) {
+        counts[illustId] = ((counts[illustId] ?: base) + delta).coerceAtLeast(0)
+    }
+
     fun update(illustId: Long, first: Comment?, total: Int) {
         if (first != null) cache[illustId] = first else cache.remove(illustId)
         if (total >= 0) counts[illustId] = total

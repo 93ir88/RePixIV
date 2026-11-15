@@ -81,6 +81,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Pixiv.init(applicationContext)
+        com.repixiv.app.pixiv.Notifications.init(applicationContext)
         Filters.init(applicationContext)
         LocalLists.init(applicationContext)
         PlayerStore.init(applicationContext)

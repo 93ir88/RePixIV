@@ -5,6 +5,15 @@
 
 package com.repixiv.app.pages
 
+import com.repixiv.app.pixiv.Notifications
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.runtime.mutableStateMapOf
@@ -299,14 +308,15 @@ fun CommentsScreen(illust: Illust) {
     val context = LocalContext.current
     val summary = MiuixTheme.colorScheme.onSurfaceVariantSummary
     val list = remember(illust.id) { mutableStateListOf<Comment>() }
+    val listState = rememberLazyListState()
     val threads = remember(illust.id) { mutableStateMapOf<Long, ReplyThread>() }
     var next by remember(illust.id) { mutableStateOf<String?>(null) }
     var loading by remember(illust.id) { mutableStateOf(false) }
     var loaded by remember(illust.id) { mutableStateOf(false) }
     var error by remember(illust.id) { mutableStateOf<String?>(null) }
     var input by remember(illust.id) { mutableStateOf(TextFieldValue("")) }
-    var sending by remember(illust.id) { mutableStateOf(false) }
     var replyTo by remember(illust.id) { mutableStateOf<ReplyTarget?>(null) }
+    var lastReply by remember(illust.id) { mutableStateOf<ReplyTarget?>(null) }
     val focus = remember { FocusRequester() }
 
     suspend fun load(reset: Boolean) {
@@ -322,6 +332,7 @@ fun CommentsScreen(illust: Illust) {
             loaded = true
             // Only trust the server total; fall back to what we have loaded when the response has none.
             CommentPreviews.update(illust.id, list.firstOrNull(), if (p.total >= 0) p.total else list.size)
+            Notifications.trackFromComments(illust.id, list)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -334,28 +345,44 @@ fun CommentsScreen(illust: Illust) {
 
     // Tapping "Reply" focuses the box and opens the keyboard.
     LaunchedEffect(replyTo) {
-        if (replyTo != null) runCatching { focus.requestFocus() }
+        if (replyTo != null) {
+            lastReply = replyTo
+            runCatching { focus.requestFocus() }
+        }
     }
 
     fun send() {
         val text = input.text.trim()
-        if (text.isEmpty() || sending) return
+        if (text.isEmpty()) return
         val target = replyTo
-        sending = true
-        scope.launch {
-            try {
-                Pixiv.addComment(illust.id, text, target?.root?.id)
-                input = TextFieldValue("")
-                replyTo = null
-                if (target != null) threads.refreshReplies(target.root.id) else load(true)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Toast.makeText(context, e.message ?: "Could not post comment", Toast.LENGTH_LONG).show()
-            } finally {
-                sending = false
-            }
-        }
+        // Clear the box right away; the comment shows up instantly and is sent in the background.
+        input = TextFieldValue("")
+        replyTo = null
+        postComment(
+            context = context,
+            illust = illust,
+            text = text,
+            target = target,
+            threads = threads,
+            insertTop = { temp ->
+                list.add(0, temp)
+                CommentPreviews.cache[illust.id] = temp
+                scope.launch { runCatching { listState.animateScrollToItem(0) } }
+            },
+            resolveTop = { key, real ->
+                val i = list.indexOfFirst { it.tempKey == key }
+                if (i >= 0) {
+                    if (real != null) list[i] = real else list.removeAt(i)
+                }
+                val first = list.firstOrNull()
+                if (first != null) CommentPreviews.cache[illust.id] = first else CommentPreviews.cache.remove(illust.id)
+            },
+            reloadTop = { load(true) },
+            onFailed = {
+                if (input.text.isEmpty()) input = TextFieldValue(text)
+                replyTo = target
+            },
+        )
     }
 
     PageScaffold(
@@ -371,12 +398,17 @@ fun CommentsScreen(illust: Illust) {
                     .navigationBarsPadding()
                     .imePadding(),
             ) {
-                replyTo?.let { r ->
+                AnimatedVisibility(
+                    visible = replyTo != null,
+                    enter = fadeIn(tween(220)) + expandVertically(spring(dampingRatio = 1f, stiffness = 380f)),
+                    exit = fadeOut(tween(140)) + shrinkVertically(spring(dampingRatio = 1f, stiffness = 380f)),
+                ) {
+                    val r = replyTo ?: lastReply
                     Row(
                         Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text("Replying to ${r.target.userName}", color = summary, fontSize = 13.sp, maxLines = 1, modifier = Modifier.weight(1f))
+                        Text("Replying to ${r?.target?.userName.orEmpty()}", color = summary, fontSize = 13.sp, maxLines = 1, modifier = Modifier.weight(1f))
                         Text(
                             "Cancel",
                             color = MiuixTheme.colorScheme.primary,
@@ -396,7 +428,7 @@ fun CommentsScreen(illust: Illust) {
                         useLabelAsPlaceholder = true,
                         modifier = Modifier.weight(1f).focusRequester(focus),
                     )
-                    IconButton(onClick = { send() }, enabled = !sending && input.text.isNotBlank()) {
+                    IconButton(onClick = { send() }, enabled = input.text.isNotBlank()) {
                         Icon(
                             imageVector = MiuixIcons.Send,
                             contentDescription = "Send",
@@ -408,9 +440,11 @@ fun CommentsScreen(illust: Illust) {
         },
     ) { contentPadding, scrollModifier, _ ->
         Box(Modifier.fillMaxSize()) {
-            LazyColumn(modifier = scrollModifier, contentPadding = contentPadding) {
-                items(list, key = { it.id }) { c ->
+            LazyColumn(modifier = scrollModifier, state = listState, contentPadding = contentPadding) {
+                items(list, key = { it.key }) { c ->
+                    EnterAnimated(animate = c.tempKey != 0L) {
                     CommentThread(
+                        illustId = illust.id,
                         c = c,
                         threads = threads,
                         avatarSize = 40.dp,
@@ -419,6 +453,7 @@ fun CommentsScreen(illust: Illust) {
                         onReply = { replyTo = it },
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                     )
+                    }
                 }
                 item(key = "footer") {
                     val n = next

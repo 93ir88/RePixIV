@@ -69,7 +69,13 @@ data class Comment(
     val stampUrl: String?,
     val hasReplies: Boolean = false,
     val parentId: Long = 0,
-)
+    /** True while a locally inserted comment is still being sent to pixiv. */
+    val pending: Boolean = false,
+    /** Stable list key for locally inserted comments, so swapping in the server copy doesn't re-animate. */
+    val tempKey: Long = 0,
+) {
+    val key: Long get() = if (tempKey != 0L) tempKey else id
+}
 
 /** [total] is the server-side comment count, or -1 when the response did not carry one. */
 data class CommentPage(val items: List<Comment>, val nextUrl: String?, val total: Int = -1)
@@ -160,6 +166,7 @@ object Pixiv {
     fun logout() {
         session = null
         prefs?.edit()?.clear()?.apply()
+        Notifications.reset()
     }
 
     // ---------- PKCE login ----------
@@ -382,11 +389,16 @@ object Pixiv {
         return CommentPage(out, j.optString("next_url").takeIf { it.isNotBlank() && it != "null" }, total)
     }
 
-    suspend fun addComment(illustId: Long, text: String, parentCommentId: Long? = null) = withContext(Dispatchers.IO) {
+    /** Returns the new comment's id when pixiv's response carries one. */
+    suspend fun addComment(illustId: Long, text: String, parentCommentId: Long? = null): Long? = withContext(Dispatchers.IO) {
         val form = mutableMapOf("illust_id" to illustId.toString(), "comment" to text)
         if (parentCommentId != null) form["parent_comment_id"] = parentCommentId.toString()
-        call("POST", "$API/v1/illust/comment/add", form)
-        Unit
+        val j = call("POST", "$API/v1/illust/comment/add", form)
+        j.optJSONObject("comment")?.optLong("id", 0L)?.takeIf { it > 0 }
+    }
+
+    suspend fun illustDetail(illustId: Long): Illust = withContext(Dispatchers.IO) {
+        parseIllust(get("$API/v1/illust/detail?illust_id=$illustId").getJSONObject("illust"))
     }
 
     // ---------- internals ----------

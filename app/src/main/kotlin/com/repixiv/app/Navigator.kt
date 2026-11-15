@@ -17,6 +17,7 @@ sealed interface Screen {
     data class Comments(val illust: Illust) : Screen
     data class Trending(val tags: List<TrendTag>) : Screen
     data class FeedList(val title: String, val kind: String) : Screen
+    data object NotificationList : Screen
     data object AccountSettings : Screen
 }
 

@@ -5,6 +5,14 @@
 
 package com.repixiv.app.pages
 
+import com.repixiv.app.pixiv.Notifications
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.runtime.mutableStateMapOf
@@ -115,7 +123,7 @@ fun PostScreen(illust: Illust) {
     val threads = remember(illust.id) { mutableStateMapOf<Long, ReplyThread>() }
     var replyTo by remember(illust.id) { mutableStateOf<ReplyTarget?>(null) }
     val inputFocus = remember { FocusRequester() }
-    var sending by remember(illust.id) { mutableStateOf(false) }
+    var lastReply by remember(illust.id) { mutableStateOf<ReplyTarget?>(null) }
     var captionExpanded by remember(illust.id) { mutableStateOf(false) }
     val captionText = remember(illust.id) { htmlToText(illust.caption) }
     val pageCount = illust.largeUrls.size.coerceAtLeast(1)
@@ -126,6 +134,7 @@ fun PostScreen(illust: Illust) {
             val p = Pixiv.comments(illust.id)
             comments = p.items.take(3)
             CommentPreviews.update(illust.id, p.items.firstOrNull(), if (p.total >= 0) p.total else p.items.size)
+            Notifications.trackFromComments(illust.id, p.items)
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
@@ -134,7 +143,10 @@ fun PostScreen(illust: Illust) {
 
     // Tapping "Reply" focuses the comment box and opens the keyboard.
     LaunchedEffect(replyTo) {
-        if (replyTo != null) runCatching { inputFocus.requestFocus() }
+        if (replyTo != null) {
+            lastReply = replyTo
+            runCatching { inputFocus.requestFocus() }
+        }
     }
 
     LaunchedEffect(illust.id) {
@@ -325,18 +337,16 @@ fun PostScreen(illust: Illust) {
                 Column(Modifier.fillMaxWidth().padding(12.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Comments", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                        Text(
-                            CommentPreviews.count(illust).toString(),
-                            fontSize = 12.sp,
-                            modifier = Modifier
-                                .padding(start = 8.dp)
-                                .background(MiuixTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(50))
-                                .padding(horizontal = 8.dp, vertical = 1.dp),
-                        )
+                        CountChip(CommentPreviews.count(illust), Modifier.padding(start = 8.dp))
                     }
-                    replyTo?.let { r ->
+                    AnimatedVisibility(
+                        visible = replyTo != null,
+                        enter = fadeIn(tween(220)) + expandVertically(spring(dampingRatio = 1f, stiffness = 380f)),
+                        exit = fadeOut(tween(140)) + shrinkVertically(spring(dampingRatio = 1f, stiffness = 380f)),
+                    ) {
+                        val r = replyTo ?: lastReply
                         Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text("Replying to ${r.target.userName}", color = summary, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                            Text("Replying to ${r?.target?.userName.orEmpty()}", color = summary, fontSize = 12.sp, modifier = Modifier.weight(1f))
                             Text("Cancel", color = MiuixTheme.colorScheme.primary, fontSize = 12.sp, modifier = Modifier.clickable { replyTo = null }.padding(8.dp))
                         }
                     }
@@ -350,33 +360,45 @@ fun PostScreen(illust: Illust) {
                             modifier = Modifier.weight(1f).padding(horizontal = 8.dp).focusRequester(inputFocus),
                         )
                         IconButton(
-                            enabled = !sending && input.text.isNotBlank(),
+                            enabled = input.text.isNotBlank(),
                             onClick = {
                                 val text = input.text.trim()
+                                if (text.isEmpty()) return@IconButton
                                 val target = replyTo
-                                sending = true
-                                scope.launch {
-                                    try {
-                                        Pixiv.addComment(illust.id, text, target?.root?.id)
-                                        input = TextFieldValue("")
-                                        replyTo = null
-                                        loadComments()
-                                        target?.let { threads.refreshReplies(it.root.id) }
-                                    } catch (e: CancellationException) {
-                                        throw e
-                                    } catch (e: Exception) {
-                                        Toast.makeText(context, e.message ?: "Could not post comment", Toast.LENGTH_LONG).show()
-                                    } finally {
-                                        sending = false
-                                    }
-                                }
+                                // Instant: clear the box, show the comment now, send in the background.
+                                input = TextFieldValue("")
+                                replyTo = null
+                                postComment(
+                                    context = context,
+                                    illust = illust,
+                                    text = text,
+                                    target = target,
+                                    threads = threads,
+                                    insertTop = { temp ->
+                                        comments = (listOf(temp) + comments).take(3)
+                                        CommentPreviews.cache[illust.id] = temp
+                                    },
+                                    resolveTop = { key, real ->
+                                        comments = comments.mapNotNull { if (it.tempKey == key) real else it }
+                                        val first = comments.firstOrNull()
+                                        if (first != null) CommentPreviews.cache[illust.id] = first else CommentPreviews.cache.remove(illust.id)
+                                    },
+                                    reloadTop = { loadComments() },
+                                    onFailed = {
+                                        if (input.text.isEmpty()) input = TextFieldValue(text)
+                                        replyTo = target
+                                    },
+                                )
                             },
                         ) {
                             Icon(imageVector = MiuixIcons.Send, contentDescription = "Send", tint = MiuixTheme.colorScheme.primary)
                         }
                     }
                     comments.forEach { c ->
+                      androidx.compose.runtime.key(c.key) {
+                        EnterAnimated(animate = c.tempKey != 0L) {
                         CommentThread(
+                            illustId = illust.id,
                             c = c,
                             threads = threads,
                             avatarSize = 36.dp,
@@ -385,6 +407,8 @@ fun PostScreen(illust: Illust) {
                             onReply = { replyTo = it },
                             modifier = Modifier.padding(top = 14.dp),
                         )
+                        }
+                      }
                     }
                     Button(
                         onClick = { nav.push(Screen.Comments(illust)) },

@@ -307,14 +307,7 @@ private fun CommentsPreview(a: Illust) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Comments", fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                Text(
-                    count.toString(),
-                    fontSize = 12.sp,
-                    modifier = Modifier
-                        .padding(start = 8.dp)
-                        .background(MiuixTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(50))
-                        .padding(horizontal = 8.dp, vertical = 1.dp),
-                )
+                CountChip(count, Modifier.padding(start = 8.dp), fontSize = 12)
             }
             if (preview != null) {
                 Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
