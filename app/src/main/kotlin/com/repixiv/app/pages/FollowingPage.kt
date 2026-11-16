@@ -82,6 +82,7 @@ fun FollowingPage(padding: PaddingValues) {
 
     // tapping the Following icon while on Following: jump to the top and refresh
     val onReselect by rememberUpdatedState<() -> Unit> {
+        TabReselect.firstSection(1, tab)
         if (uid != null && !refreshing) {
             scope.launch { listStates[tab].scrollToTopFast() }
             refreshing = true
@@ -92,6 +93,18 @@ fun FollowingPage(padding: PaddingValues) {
                     refreshing = false
                 }
             }
+        }
+    }
+    // First time each section (sub-tab) is opened after the app starts: scroll to the top and refresh it.
+    val sectionsReady = remember { booleanArrayOf(false) }
+    LaunchedEffect(tab) {
+        if (!sectionsReady[0]) {
+            sectionsReady[0] = true
+            return@LaunchedEffect
+        }
+        if (Pixiv.session != null && TabReselect.firstSection(1, tab)) {
+            kotlinx.coroutines.delay(150)
+            onReselect()
         }
     }
     LaunchedEffect(refreshing) { TabReselect.setRefreshing(1, refreshing) }

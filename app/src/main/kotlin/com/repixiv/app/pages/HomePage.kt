@@ -133,6 +133,7 @@ fun FeedPage(padding: PaddingValues) {
 
     // tapping the Home icon while on Home: jump to the top and refresh
     val onReselect by rememberUpdatedState<() -> Unit> {
+        TabReselect.firstSection(0, tab)
         if (session != null && !refreshing) {
             scope.launch { listStates[tab].scrollToTopFast() }
             refreshCurrent()
@@ -144,6 +145,18 @@ fun FeedPage(padding: PaddingValues) {
         while (true) {
             com.repixiv.app.pixiv.Notifications.refresh()
             kotlinx.coroutines.delay(60_000)
+        }
+    }
+    // First time each section (sub-tab) is opened after the app starts: scroll to the top and refresh it.
+    val sectionsReady = remember { booleanArrayOf(false) }
+    LaunchedEffect(tab) {
+        if (!sectionsReady[0]) {
+            sectionsReady[0] = true
+            return@LaunchedEffect
+        }
+        if (Pixiv.session != null && TabReselect.firstSection(0, tab)) {
+            kotlinx.coroutines.delay(150)
+            onReselect()
         }
     }
     LaunchedEffect(refreshing) { TabReselect.setRefreshing(0, refreshing) }

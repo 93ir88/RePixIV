@@ -5,6 +5,7 @@
 
 package com.repixiv.app
 
+import com.repixiv.app.pixiv.Pixiv
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
@@ -128,6 +129,20 @@ fun AppContent(padding: PaddingValues) {
     val scope = rememberCoroutineScope()
     val mainPagerState = remember(pagerState) { MainPagerState(pagerState, scope) }
     LaunchedEffect(mainPagerState.pagerState.currentPage) { mainPagerState.syncPage() }
+
+    // Every login: start the first-open behaviour over and scroll to top + refresh the tab that is showing.
+    val loggedIn = Pixiv.session != null
+    var wasLoggedIn by remember { mutableStateOf(loggedIn) }
+    LaunchedEffect(loggedIn) {
+        if (loggedIn && !wasLoggedIn) {
+            TabReselect.resetFirsts()
+            kotlinx.coroutines.delay(400)
+            val current = mainPagerState.pagerState.currentPage
+            TabReselect.firstTap(current)
+            TabReselect.fire(current)
+        }
+        wasLoggedIn = loggedIn
+    }
 
     BackHandler(enabled = mainPagerState.selectedPage != 0) { mainPagerState.animateToPage(0) }
 
@@ -481,13 +496,14 @@ class MainPagerState(
      * the very top (0.5 s) and refreshes once the page has settled, same as tapping the active tab.
      */
     fun tabSelected(index: Int) {
-        val first = TabReselect.firstTap(index)
+        // Only once logged in; before that the tap stays "unused" so it still counts after logging in.
+        val first = Pixiv.session != null && TabReselect.firstTap(index)
         animateToPage(index, if (first) ({ TabReselect.fire(index) }) else null)
     }
 
     /** Bottom-bar tap on the tab that is already open: scroll to top and refresh. */
     fun tabReselected(index: Int) {
-        TabReselect.firstTap(index)
+        if (Pixiv.session != null) TabReselect.firstTap(index)
         TabReselect.fire(index)
     }
 

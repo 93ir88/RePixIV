@@ -71,6 +71,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.repixiv.app.TabReselect
+import com.repixiv.app.pixiv.Pixiv
 import com.repixiv.app.util.scrollToTopFast
 import com.repixiv.app.player.PlayerController
 import com.repixiv.app.player.PlayerState
@@ -266,6 +267,7 @@ fun PlayerPage(padding: PaddingValues) {
 
     // tapping the Player icon while on Player: jump to the top, and load a fresh set of songs unless searching
     val onReselect by rememberUpdatedState<() -> Unit> {
+        TabReselect.firstSection(3, tab)
         scope.launch {
             when {
                 submitted.isNotBlank() -> searchListState.scrollToTopFast()
@@ -274,6 +276,18 @@ fun PlayerPage(padding: PaddingValues) {
             }
         }
         if (submitted.isBlank() && tab == 0) refreshFeed()
+    }
+    // First time each section (sub-tab) is opened after the app starts: scroll to the top and refresh it.
+    val sectionsReady = remember { booleanArrayOf(false) }
+    LaunchedEffect(tab) {
+        if (!sectionsReady[0]) {
+            sectionsReady[0] = true
+            return@LaunchedEffect
+        }
+        if (Pixiv.session != null && TabReselect.firstSection(3, tab)) {
+            kotlinx.coroutines.delay(150)
+            onReselect()
+        }
     }
     LaunchedEffect(refreshing) { TabReselect.setRefreshing(3, refreshing) }
     LaunchedEffect(Unit) { TabReselect.events.collect { if (it == 3) onReselect() } }
